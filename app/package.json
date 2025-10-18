@@ -28,7 +28,13 @@
     "@canonical/react-ds-core": "0.9.0",
     "@canonical/react-ssr": "0.9.0",
     "@canonical/styles": "0.9.0",
+    "@emotion/react": "^11.14.0",
+    "@emotion/styled": "^11.14.1",
+    "@mui/icons-material": "^7.3.4",
+    "@mui/material": "^7.3.4",
+    "@mui/x-date-pickers": "^8.14.1",
     "express": "5.0.0",
+    "material-react-table": "^3.2.1",
     "react": "19.1.0",
     "react-dom": "19.1.0"
   },
