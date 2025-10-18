@@ -8,6 +8,7 @@ interface AccordionStepProps {
     activeStep: number;
     children: React.ReactNode;
     onHeaderClick: (stepNumber: number) => void;
+    summaryTitle?: string;
 }
 
 const AccordionStep: React.FC<AccordionStepProps> = ({
@@ -16,6 +17,7 @@ const AccordionStep: React.FC<AccordionStepProps> = ({
     activeStep,
     children,
     onHeaderClick,
+    summaryTitle,
 }) => {
 
     // A step is active if its number matches the parent's activeStep state
@@ -31,14 +33,17 @@ const AccordionStep: React.FC<AccordionStepProps> = ({
     if (isActive) headerClass += ' active';
     if (isCompleted) headerClass += ' completed';
     if (isClickable) headerClass += ' clickable';
-
+// Determine which title to display.
+  // Use the summaryTitle if the step is completed AND summaryTitle was provided.
+  // Otherwise, fall back to the default title.
+  const displayTitle = (isCompleted && summaryTitle) ? summaryTitle : title;
     return (
         <div className="accordion-step">
             <div
                 className={headerClass}
                 onClick={() => onHeaderClick(stepNumber)}
             >
-                <h3>{title} {isCompleted && '✓'}</h3>
+                <h3>{displayTitle} {isCompleted && '✓'}</h3>
             </div>
 
             {/* The 'accordion-content' div uses CSS to 'unfold'

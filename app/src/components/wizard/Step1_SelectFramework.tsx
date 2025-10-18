@@ -33,10 +33,13 @@ const frameworks: Framework[] = [
 const Step1_SelectFramework: React.FC<StepProps> = ({ onComplete }) => {
   const [selectedFrameworkId, setSelectedFrameworkId] = useState<string | null>(null);
 
-  const handleFrameworkSelect = (frameworkId: string) => {
-    setSelectedFrameworkId(frameworkId);
-    // Immediately call onComplete to advance to the next step
-    onComplete({ framework: frameworkId });
+const handleFrameworkSelect = (framework: Framework) => {
+    setSelectedFrameworkId(framework.id);
+// Pass both the ID and the display Name up to the parent
+    onComplete({ 
+      framework: framework.id,
+      frameworkName: framework.name  // <-- This is the new piece of data
+    });
   };
 
   return (
@@ -49,7 +52,7 @@ const Step1_SelectFramework: React.FC<StepProps> = ({ onComplete }) => {
           <div
             key={framework.id}
             className={`framework-card ${selectedFrameworkId === framework.id ? 'selected' : ''}`}
-            onClick={() => handleFrameworkSelect(framework.id)}
+            onClick={() => handleFrameworkSelect(framework)}
           >
             <img src={framework.logoSrc} alt={`${framework.name} Logo`} className="framework-logo" />
             <span className="framework-title">{framework.name}</span>

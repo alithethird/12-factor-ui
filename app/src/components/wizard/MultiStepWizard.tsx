@@ -16,6 +16,7 @@ const MultiStepWizard: React.FC = () => {
   // State to hold all the data collected from the steps
   const [formData, setFormData] = useState({
     framework: '',
+    frameworkName: '',
     source: null,
     integrations: [],
     envVars: {},
@@ -56,6 +57,11 @@ const MultiStepWizard: React.FC = () => {
         stepNumber={1}
         activeStep={activeStep}
         onHeaderClick={handleSetStep}
+        summaryTitle={
+          formData.frameworkName 
+            ? `Selected Framework: ${formData.frameworkName}` 
+            : undefined
+        }
       >
         <Step1_SelectFramework
           onComplete={(data) => handleStepComplete(1, data)}
