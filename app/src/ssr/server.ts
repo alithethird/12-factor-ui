@@ -217,11 +217,11 @@ app.post('/api/validate-github', async (req: Request, res: Response) => {
     if (!result.valid) {
       throw new Error(result.error || 'Project validation failed.');
     }
-
+const projectName = repoUrl.split('/').pop()?.replace('.git', '') || 'GitHub Repo';
     // 3. Success
     res.json({
       success: true,
-      sourceData: { type: 'github', url: repoUrl },
+      sourceData: { type: 'github', url: repoUrl,projectName: projectName, },
     });
   } catch (error: any) {
     res.status(400).json({ success: false, error: error.message });
@@ -249,8 +249,25 @@ app.post('/api/validate-upload', upload.single('file'), async (req: Request, res
     const { folderPath, cleanup } = await extractor.extract();
     extractCleanup = cleanup;
 
+    let projectPath = folderPath;
+    let projectName = file.originalname.replace('.zip', '').replace('.tar.gz', '').replace('.tar', ''); // Default
+
+// Read the contents of the extracted directory
+    const rootItems = fs.readdirSync(folderPath).filter(name => 
+      !name.startsWith('.') && name !== '__MACOSX'
+    );
+
+    // If there is exactly one item, and it's a directory, use it as the project path
+    if (rootItems.length === 1) {
+      const singleItemPath = path.join(folderPath, rootItems[0]);
+      if (fs.statSync(singleItemPath).isDirectory()) {
+        projectPath = singleItemPath; // This is the real project path
+        projectName = rootItems[0];   // This is the real project name
+      }
+    }
+    // Else: we assume it's a "rootless" archive, so folderPath is correct.
     // 2. Validate
-    const processor = new ApplicationProcessor(folderPath, framework);
+    const processor = new ApplicationProcessor(projectPath, framework);
     const result = await processor.checkProject();
 
     if (!result.valid) {
@@ -260,7 +277,7 @@ app.post('/api/validate-upload', upload.single('file'), async (req: Request, res
     // 3. Success
     res.json({
       success: true,
-      sourceData: { type: 'upload', fileName: file.originalname },
+      sourceData: { type: 'upload', fileName: file.originalname, projectName: projectName, },
     });
   } catch (error: any) {
     res.status(400).json({ success: false, error: error.message });

@@ -18,6 +18,7 @@ const MultiStepWizard: React.FC = () => {
     framework: '',
     frameworkName: '',
     source: null,
+    sourceProjectName: '',
     integrations: [],
     envVars: {},
   });
@@ -34,6 +35,7 @@ const MultiStepWizard: React.FC = () => {
     setFormData(prevData => ({
       ...prevData,
       ...data,
+      sourceProjectName: data.source?.projectName || prevData.sourceProjectName,
     }));
 
     // Unfold the next step
@@ -73,6 +75,11 @@ const MultiStepWizard: React.FC = () => {
         stepNumber={2}
         activeStep={activeStep}
         onHeaderClick={handleSetStep}
+        summaryTitle={
+          formData.sourceProjectName 
+            ? `Source: ${formData.sourceProjectName}` 
+            : undefined
+        }
       >
         <Step2_UploadCode
           onComplete={(data) => handleStepComplete(2, data)}
