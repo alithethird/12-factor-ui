@@ -146,3 +146,64 @@
 .framework-card.selected .framework-title {
   color: #0056b3; /* Darker blue for selected text */
 }
+
+/* --- STYLES FOR STEP 2 TABS --- */
+
+.tab-container {
+  display: flex;
+  border-bottom: 2px solid #ddd;
+  margin-bottom: 1.5rem;
+}
+
+.tab-button {
+  padding: 0.75rem 1.25rem;
+  font-size: 1rem;
+  font-weight: 500;
+  cursor: pointer;
+  background-color: transparent;
+  border: none;
+  border-bottom: 3px solid transparent;
+  color: #555;
+  margin-bottom: -2px; /* Aligns with the container's bottom border */
+  transition: all 0.2s ease;
+}
+
+.tab-button:hover {
+  background-color: #f9f9f9;
+  color: #000;
+}
+
+.tab-button.active {
+  color: #007bff;
+  border-bottom-color: #007bff;
+}
+
+.input-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.input-group label {
+  font-weight: 500;
+  color: #333;
+}
+
+.input-group input[type="text"],
+.input-group input[type="file"] {
+  width: 100%;
+  padding: 0.5rem;
+  font-size: 1rem;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  box-sizing: border-box; /* Ensures padding doesn't break width */
+}
+
+.error-message {
+  margin-top: 1rem;
+  padding: 0.75rem;
+  background-color: #fff0f0;
+  border: 1px solid #ffbaba;
+  color: #d8000c;
+  border-radius: 4px;
+}

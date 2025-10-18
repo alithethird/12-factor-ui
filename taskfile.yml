@@ -7,7 +7,7 @@ env:
   BUILD_ENV: development
   IMAGE_NAME: react-express-poc
   FRONTEND_PORT: 5173
-  BACKEND_PORT: 8000
+  BACKEND_PORT: 8080
 
 tasks:
   default:

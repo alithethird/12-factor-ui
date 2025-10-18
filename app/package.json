@@ -33,10 +33,13 @@
     "@mui/icons-material": "^7.3.4",
     "@mui/material": "^7.3.4",
     "@mui/x-date-pickers": "^8.14.1",
+    "cors": "^2.8.5",
     "express": "5.0.0",
     "material-react-table": "^3.2.1",
+    "multer": "^2.0.2",
     "react": "19.1.0",
-    "react-dom": "19.1.0"
+    "react-dom": "19.1.0",
+    "tmp": "^0.2.5"
   },
   "devDependencies": {
     "@biomejs/biome": "1.9.4",

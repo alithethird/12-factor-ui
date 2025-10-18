@@ -6,6 +6,12 @@ export default defineConfig({
   plugins: [tsconfigPaths(), react()],
   ssr: {
     noExternal: /@canonical\/*/,
+    external: [
+      'express',
+      'cors',
+      'multer',
+      'tmp'
+    ]
   },
   server: {
     host: '0.0.0.0',
@@ -17,5 +23,6 @@ export default defineConfig({
         secure: false,
       },
     },
+    
   },
 });

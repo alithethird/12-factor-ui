@@ -76,6 +76,7 @@ const MultiStepWizard: React.FC = () => {
       >
         <Step2_UploadCode
           onComplete={(data) => handleStepComplete(2, data)}
+          framework={formData.framework}
         />
       </AccordionStep>
 
