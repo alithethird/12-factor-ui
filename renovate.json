@@ -1,0 +1,13 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "dependencyDashboard": true,
+  "extends": [
+    "github>canonical/renovate-apps"
+  ],
+  "labels": [
+    "bot",
+    "dependencies",
+    "Review: QA needed"
+  ],
+  "reviewersFromCodeOwners": true
+}

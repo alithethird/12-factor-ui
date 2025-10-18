@@ -1,0 +1,86 @@
+# Node.js
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+lerna-debug.log*
+.pnp/
+.pnp.js
+
+# Bun (as package manager)
+bun.lockb      # Bun's binary lockfile - generally ignore this due to merge conflicts
+.bun/          # Bun's internal project cache directory
+bun-debug.log* # Bun's debug logs
+
+# Build outputs (for both frontend and backend)
+# These directories contain the compiled/transpiled code and assets
+build/
+dist/
+public/build/ # If your build artifacts go into a 'build' folder inside 'public'
+.next/        # Next.js build output
+.nuxt/        # Nuxt.js build output
+out/          # Common for static site generators or custom build outputs
+
+# # TypeScript
+# # Compiled JavaScript files (transpiled from .ts) and their source maps
+# *.js
+# *.js.map
+# *.d.ts # Declaration files IF they are only generated and not source
+# tsconfig.tsbuildinfo # Incremental build info
+
+# Environment variables
+# These files contain sensitive information or local configurations
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+!.env.example # Keep this line if you want to include an example .env file for reference
+
+# Log files
+*.log
+
+# Test coverage results
+coverage/
+.nyc_output/
+
+# IDE and Editor specific files
+.vscode/  # VS Code settings (if user-specific, not project-wide)
+.idea/    # IntelliJ/WebStorm specific files
+*.iml     # IntelliJ module files
+.DS_Store # macOS specific
+Thumbs.db # Windows specific
+*.suo
+*.user
+*.bak
+*.swp
+*~
+.eslintcache
+.prettierignore # Usually committed to keep formatting consistent, but some prefer to ignore
+.cache/
+
+# OS and temporary files
+tmp/
+temp/
+
+# Dependency Management Lock Files (for other package managers, if not using Bun exclusively)
+# If you are using Bun, you might not have these, but include them for safety.
+# It's generally recommended to commit package-lock.json or yarn.lock for reproducible builds.
+# If you stick strictly to Bun, you can remove these.
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+
+# no rocks or charms
+*.rock
+*.charm
+
+venv/
+build/
+*.charm
+.tox/
+.coverage
+__pycache__/
+*.py[cod]
+.idea
+.vscode/
+.task/

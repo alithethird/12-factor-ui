@@ -1,0 +1,13 @@
+@import url("@canonical/styles");
+
+.app {
+  display: grid;
+  place-items: center;
+  place-content: center;
+  min-height: 100dvh;
+
+  button,
+  a {
+    width: fit-content;
+  }
+}
