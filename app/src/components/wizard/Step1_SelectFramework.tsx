@@ -35,15 +35,8 @@ const Step1_SelectFramework: React.FC<StepProps> = ({ onComplete }) => {
 
   const handleFrameworkSelect = (frameworkId: string) => {
     setSelectedFrameworkId(frameworkId);
-  };
-
-  const handleNext = () => {
-    if (!selectedFrameworkId) {
-      alert('Please select a framework.');
-      return;
-    }
-    // Pass the ID of the selected framework to onComplete
-    onComplete({ framework: selectedFrameworkId });
+    // Immediately call onComplete to advance to the next step
+    onComplete({ framework: frameworkId });
   };
 
   return (
@@ -64,9 +57,6 @@ const Step1_SelectFramework: React.FC<StepProps> = ({ onComplete }) => {
         ))}
       </div>
       
-      <button onClick={handleNext} disabled={!selectedFrameworkId} style={{ marginTop: '1.5rem' }}>
-        Next: Upload Code
-      </button>
     </div>
   );
 };
