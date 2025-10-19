@@ -1,0 +1,18 @@
+.accordion-content {
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.5s ease-in-out;
+}
+
+.accordion-content.open {
+    max-height: 1000px; /* Adjust if content is taller */
+}
+
+.framework-card.selected {
+    border-color: #3b82f6; /* Tailwind blue-500 */
+    background-color: #eff6ff; /* Tailwind blue-50 */
+}
+
+.framework-logo {
+    object-fit: contain;
+}
