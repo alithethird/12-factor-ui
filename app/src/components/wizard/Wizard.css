@@ -267,3 +267,103 @@
   color: #666;
   line-height: 1.3;
 }
+
+
+/* --- STYLES FOR STEP 4 CONFIG OPTIONS --- */
+
+.config-list {
+  margin-top: 1.5rem;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  overflow: hidden; /* For rounded corners */
+}
+
+.config-row {
+  display: grid;
+  /* Columns: Key, Type, Optional, Value, Action */
+  grid-template-columns: 2fr 1fr 1fr 2fr 100px; /* UPDATED */
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid #eee;
+}
+
+.config-row:last-child {
+  border-bottom: none;
+}
+
+.config-row.header {
+  background-color: #f9f9f9;
+  font-weight: 600;
+  color: #333;
+  padding: 0.5rem 1rem;
+}
+
+/* Style for text cells to prevent overflow */
+.config-row span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.config-add-row {
+  display: grid;
+  /* Columns: Key, Type, Optional, Value, Action */
+  grid-template-columns: 2fr 1fr 1fr 2fr 100px; /* UPDATED */
+  gap: 0.5rem;
+  margin-top: 1rem;
+  align-items: center; /* Better vertical alignment */
+}
+
+/* Style for inputs and select in the add row */
+.config-add-row input,
+.config-add-row select {
+  width: 100%;
+  padding: 0.5rem;
+  font-size: 0.9rem;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  box-sizing: border-box;
+}
+
+.config-add-row button,
+.config-row button {
+  padding: 0.5rem;
+  font-size: 0.9rem;
+  border-radius: 4px;
+  cursor: pointer;
+  border: none;
+  font-weight: 500;
+}
+
+.config-add-row .add-btn {
+  background-color: #28a745; /* Green */
+  color: white;
+}
+.config-add-row .add-btn:hover {
+  background-color: #218838;
+}
+
+.config-row .remove-btn {
+  background-color: #dc3545; /* Red */
+  color: white;
+}
+.config-row .remove-btn:hover {
+  background-color: #c82333;
+}
+.config-add-row {
+  display: grid;
+  /* Columns: Key, Type, Optional, Value, Action */
+  grid-template-columns: 2fr 1fr 1fr 2fr 100px; /* UPDATED */
+  gap: 0.5rem;
+  margin-top: 1rem;
+  align-items: center; /* Better vertical alignment */
+}
+.config-add-row {
+  display: grid;
+  /* Columns: Key, Type, Optional, Value, Action */
+  grid-template-columns: 2fr 1fr 1fr 2fr 100px; /* UPDATED */
+  gap: 0.5rem;
+  margin-top: 1rem;
+  align-items: center; /* Better vertical alignment */
+}

@@ -20,7 +20,7 @@ const MultiStepWizard: React.FC = () => {
     source: null,
     sourceProjectName: '',
     integrations: [],
-    envVars: {},
+    configOptions: [],
   });
 
   /**
@@ -105,10 +105,15 @@ const MultiStepWizard: React.FC = () => {
       </AccordionStep>
 
       <AccordionStep
-        title="4. Enter Custom Environment Variables"
+        title="4. Enter Custom Config Options"
         stepNumber={4}
         activeStep={activeStep}
         onHeaderClick={handleSetStep}
+        summaryTitle={
+          formData.configOptions.length > 0
+            ? `${formData.configOptions.length} Config Option(s)`
+            : undefined
+        }
       >
         <Step4_EnterConfigOptions
           onComplete={(data) => handleStepComplete(4, data)}
