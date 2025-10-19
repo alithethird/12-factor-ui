@@ -1,6 +1,6 @@
 // src/components/wizard/Step4_EnterConfigOptions.tsx
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { StepProps } from './stepProps';
 
 // Define the new structure for a single config option
@@ -12,11 +12,26 @@ interface ConfigOption {
   value: string; // Default Value
   isOptional: boolean;
 }
+/**
+ * Converts a kebab-case key to the framework-specific env var.
+ */
+const convertToEnvVar = (key: string, framework?: string): string => {
+  let prefix = 'APP';
+  if (framework === 'django') {
+    prefix = 'DJANGO';
+  } else if (framework === 'flask') {
+    prefix = 'FLASK';
+  }
 
-const Step4_EnterConfigOptions: React.FC<StepProps> = ({ onComplete }) => {
+  const processedKey = key.replace(/-/g, '_').toUpperCase();
+
+  return `${prefix}_${processedKey}`;
+};
+
+const Step4_EnterConfigOptions: React.FC<StepProps> = ({ onComplete, framework }) => {
   // State for the list of options already added
   const [options, setOptions] = useState<ConfigOption[]>([]);
-  
+
   // State for the inputs of the "new option" row
   const [newKey, setNewKey] = useState('');
   const [newType, setNewType] = useState<ConfigType>('string');
@@ -24,12 +39,18 @@ const Step4_EnterConfigOptions: React.FC<StepProps> = ({ onComplete }) => {
   const [newIsOptional, setNewIsOptional] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const [envPrefix, exampleEnvVar] = useMemo(() => {
+    const key = 'some-config';
+    const envVar = convertToEnvVar(key, framework);
+    const prefix = envVar.substring(0, envVar.indexOf('_') + 1);
+    return [prefix, envVar];
+  }, [framework]);
   /**
    * Adds the new option from state to the main options list
    */
   const handleAddOption = () => {
     setError(null);
-    
+
     // Basic validation
     if (!newKey.trim()) {
       setError('Config option name cannot be empty.');
@@ -50,9 +71,9 @@ const Step4_EnterConfigOptions: React.FC<StepProps> = ({ onComplete }) => {
     // Add the new option to the list
     setOptions([
       ...options,
-      { 
-        key: newKey.trim(), 
-        type: newType, 
+      {
+        key: newKey.trim(),
+        type: newType,
         value: newValue.trim(),
         isOptional: newIsOptional
       }
@@ -83,12 +104,21 @@ const Step4_EnterConfigOptions: React.FC<StepProps> = ({ onComplete }) => {
   return (
     <div className="step-content">
       <p>Enter any custom config options for your charm:</p>
-      
+      <div className="info-box">
+        <p>
+          <strong>Note:</strong> Your config options will be converted to
+          environment variables with the <strong><code>{envPrefix}</code></strong> prefix.
+          <br />
+          e.g., <code>some-config</code> will become <code>{exampleEnvVar}</code>
+        </p>
+      </div>
+
       {/* --- RENDER THE LIST OF ADDED OPTIONS --- */}
       <div className="config-list">
         {options.length > 0 && (
           <div className="config-row header">
-            <span>Key</span>
+            {/* --- MODIFIED HEADER --- */}
+            <span>Key / Env Var Preview</span>
             <span>Type</span>
             <span>Optional</span>
             <span>Default Value</span>
@@ -97,12 +127,20 @@ const Step4_EnterConfigOptions: React.FC<StepProps> = ({ onComplete }) => {
         )}
         {options.map((option) => (
           <div key={option.key} className="config-row">
-            <span title={option.key}>{option.key}</span>
+
+            {/* --- MODIFIED KEY CELL --- */}
+            <div className="config-key-cell">
+              <span title={option.key} className="config-key-main">{option.key}</span>
+              <span title={convertToEnvVar(option.key, framework)} className="config-key-preview">
+                {convertToEnvVar(option.key, framework)}
+              </span>
+            </div>
+
             <span>{option.type}</span>
             <span>{option.isOptional ? 'Yes' : 'No'}</span>
             <span title={option.value}>{option.value}</span>
-            <button 
-              onClick={() => handleRemoveOption(option.key)} 
+            <button
+              onClick={() => handleRemoveOption(option.key)}
               className="remove-btn"
             >
               Remove
@@ -129,7 +167,7 @@ const Step4_EnterConfigOptions: React.FC<StepProps> = ({ onComplete }) => {
           <option value="float">float</option>
           <option value="secret">secret</option>
         </select>
-        
+
         <label className="config-checkbox-label">
           <input
             type="checkbox"
@@ -138,7 +176,7 @@ const Step4_EnterConfigOptions: React.FC<StepProps> = ({ onComplete }) => {
           />
           Optional
         </label>
-        
+
         <input
           type="text"
           placeholder="Default Value"

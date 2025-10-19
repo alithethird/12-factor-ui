@@ -117,6 +117,7 @@ const MultiStepWizard: React.FC = () => {
       >
         <Step4_EnterConfigOptions
           onComplete={(data) => handleStepComplete(4, data)}
+          framework={formData.framework}
         />
       </AccordionStep>
 

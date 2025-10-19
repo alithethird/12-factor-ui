@@ -367,3 +367,48 @@
   margin-top: 1rem;
   align-items: center; /* Better vertical alignment */
 }
+
+.info-box {
+  background-color: #f4f8ff;
+  border: 1px solid #cce0ff;
+  border-radius: 6px;
+  padding: 0.75rem 1rem;
+  margin-top: 1rem;
+}
+
+.info-box p {
+  margin: 0;
+  font-size: 0.9rem;
+  line-height: 1.5;
+  color: #334;
+}
+
+.info-box code {
+  background-color: #e0eaff;
+  padding: 2px 5px;
+  border-radius: 4px;
+  font-family: 'Courier New', Courier, monospace;
+}
+
+.config-key-cell {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  overflow: hidden; /* For text-overflow */
+}
+
+.config-key-main {
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.config-key-preview {
+  font-size: 0.85rem;
+  color: #555;
+  font-style: italic;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
