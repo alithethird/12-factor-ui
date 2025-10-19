@@ -1,11 +1,14 @@
-# charmed-nodejs-boilerplate
+Django app that helps you charm your app
 
-Web team charmed NodeJS boilerplate repository.
 
-This repository provides a robust foundation for building and deploying Node.js applications as Juju charms. It includes a React frontend served by an Express backend.
 
-## Documentation
+tested: flask with .tar file
 
-For comprehensive information on setting up your development environment, understanding the project architecture, quick start guides, and more, please refer to our official documentation:
+need to test:
+- other frameworks
+- github
 
-* [**View Documentation**](./docs/index.md)
+Need to update integration selection
+Need to wire selected integrations to the charmcraft.yaml file
+Need to wire added config options to the charmcraft.yaml file
+Need to clean the repo and set it up for Django app only.

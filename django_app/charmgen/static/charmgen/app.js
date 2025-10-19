@@ -1,6 +1,42 @@
 document.addEventListener('DOMContentLoaded', () => {
     const wizardContainer = document.getElementById('wizard-container');
 
+    // --- Notification System ---
+    const notificationContainer = document.createElement('div');
+    notificationContainer.className = 'fixed bottom-5 right-5 z-50 space-y-2';
+    document.body.appendChild(notificationContainer);
+
+    function showNotification(message, type = 'info') {
+        const notification = document.createElement('div');
+        const colors = {
+            info: 'bg-blue-600',
+            success: 'bg-green-600',
+            error: 'bg-red-600',
+        };
+        notification.className = `w-64 text-white px-4 py-3 rounded-lg shadow-xl animate-fade-in ${colors[type]}`;
+        notification.textContent = message;
+        
+        notificationContainer.prepend(notification);
+        
+        setTimeout(() => {
+            notification.classList.add('animate-fade-out');
+            notification.addEventListener('animationend', () => {
+                notification.remove();
+            });
+        }, 4000);
+    }
+
+    // Inject CSS for notification animations
+    const style = document.createElement('style');
+    style.innerHTML = `
+        @keyframes fade-in { from { opacity: 0; transform: translateX(100%); } to { opacity: 1; transform: translateX(0); } }
+        .animate-fade-in { animation: fade-in 0.5s ease-out forwards; }
+        @keyframes fade-out { from { opacity: 1; transform: translateX(0); } to { opacity: 0; transform: translateX(100%); } }
+        .animate-fade-out { animation: fade-out 0.5s ease-in forwards; }
+    `;
+    document.head.appendChild(style);
+    // --- END: Notification System ---
+
     function getCookie(name) {
         let cookieValue = null;
         if (document.cookie && document.cookie !== '') {
@@ -35,8 +71,8 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     async function render() {
-        wizardContainer.innerHTML = ''; // Clear previous state
-        wizardContainer.appendChild(await renderStep1()); // Step 1 is async
+        wizardContainer.innerHTML = '';
+        wizardContainer.appendChild(await renderStep1());
         wizardContainer.appendChild(renderStep2());
         wizardContainer.appendChild(renderStep3());
         wizardContainer.appendChild(renderStep4());
@@ -68,8 +104,6 @@ document.addEventListener('DOMContentLoaded', () => {
         wrapper.querySelector('.p-6').appendChild(contentEl);
         return wrapper;
     }
-
-    // --- RENDER FUNCTIONS FOR EACH STEP ---
 
     async function renderStep1() {
         const content = document.createElement('div');
@@ -255,6 +289,12 @@ document.addEventListener('DOMContentLoaded', () => {
         content.innerHTML = `
             <h4 class="text-xl font-bold">Generation Complete!</h4>
             <p class="my-4">All your selections are ready. Click the button to generate and download your packaged Rock and Charm files.</p>
+            
+            <!-- NEW: Live Log Panel -->
+            <div id="log-panel" class="hidden my-4 border bg-gray-900 text-white font-mono text-sm rounded-lg h-64 overflow-y-auto p-4">
+                <p class="text-gray-400">Waiting for output...</p>
+            </div>
+
             <div id="error-msg-final" class="text-red-600 mb-4"></div>
             <button id="generate-btn" class="px-6 py-3 bg-green-600 text-white font-bold rounded hover:bg-green-700">Generate & Download Bundle</button>
         `;
@@ -262,12 +302,17 @@ document.addEventListener('DOMContentLoaded', () => {
         const handleGeneration = async () => {
             const btn = content.querySelector('#generate-btn');
             const errorMsg = content.querySelector('#error-msg-final');
-            btn.textContent = 'Generating...';
+            const logPanel = content.querySelector('#log-panel');
+
+            btn.textContent = 'Starting...';
             btn.disabled = true;
             errorMsg.textContent = '';
             
+            logPanel.classList.remove('hidden');
+            logPanel.innerHTML = '<p class="text-gray-400">Starting generation process...</p>';
+        
             try {
-                const response = await fetch('/api/generate-bundle/', {
+                const startResponse = await fetch('/api/start-generation/', {
                     method: 'POST',
                     headers: { 
                         'Content-Type': 'application/json',
@@ -276,27 +321,73 @@ document.addEventListener('DOMContentLoaded', () => {
                     body: JSON.stringify(state.formData)
                 });
                 
-                if (response.headers.get('Content-Type') === 'application/zip') {
-                    const blob = await response.blob();
-                    const url = window.URL.createObjectURL(blob);
-                    const a = document.createElement('a');
-                    a.style.display = 'none';
-                    a.href = url;
-                    a.download = 'rock-and-charm-bundle.zip';
-                    document.body.appendChild(a);
-                    a.click();
-                    window.URL.revokeObjectURL(url);
-                    a.remove();
-                } else {
-                    const result = await response.json();
-                    throw new Error(result.error || 'Generation failed');
+                const startResult = await startResponse.json();
+                if (!startResponse.ok) {
+                    throw new Error(startResult.error || 'Failed to start generation.');
                 }
-
+        
+                const taskId = startResult.taskId;
+                showNotification('Generation process started...');
+                btn.textContent = 'Generating...';
+        
+                const eventSource = new EventSource(`/api/generation-status/${taskId}/`);
+        
+                eventSource.onmessage = (event) => {
+                    const data = JSON.parse(event.data);
+        
+                    // --- UPDATED LOGIC ---
+                    // Differentiate between high-level status and raw logs
+                    if (data.type === 'log') {
+                        // If it's the first real log, clear the placeholder
+                        if (logPanel.querySelector('.text-gray-400')) {
+                            logPanel.innerHTML = '';
+                        }
+                        const logLine = document.createElement('p');
+                        logLine.textContent = data.text;
+                        logPanel.appendChild(logLine);
+                        // Auto-scroll to the bottom
+                        logPanel.scrollTop = logPanel.scrollHeight;
+                    } else if (data.text) { // This is a status message
+                        showNotification(data.text);
+                    } else if (data.status) { // Legacy check
+                        showNotification(data.status);
+                    }
+        
+                    if (data.downloadUrl) {
+                        showNotification('Bundle ready for download!', 'success');
+                        window.location.href = data.downloadUrl;
+                        eventSource.close();
+                        btn.textContent = 'Generate & Download Bundle';
+                        btn.disabled = false;
+                        logPanel.classList.add('hidden');
+                    }
+                    
+                    if (data.error) {
+                        eventSource.close();
+                        const errorLine = document.createElement('p');
+                        errorLine.className = 'text-red-400 font-bold';
+                        errorLine.textContent = `ERROR: ${data.error}`;
+                        logPanel.appendChild(errorLine);
+                        logPanel.scrollTop = logPanel.scrollHeight;
+                        throw new Error(data.error);
+                    }
+                };
+        
+                eventSource.onerror = (err) => {
+                    console.error("EventSource failed:", err);
+                    errorMsg.textContent = 'Error: Connection to server lost during generation.';
+                    eventSource.close();
+                    btn.textContent = 'Generate & Download Bundle';
+                    btn.disabled = false;
+                    logPanel.classList.add('hidden');
+                };
+        
             } catch(err) {
                 errorMsg.textContent = `Error: ${err.message}`;
-            } finally {
+                showNotification(err.message, 'error');
                 btn.textContent = 'Generate & Download Bundle';
                 btn.disabled = false;
+                logPanel.classList.add('hidden');
             }
         };
 
@@ -307,3 +398,4 @@ document.addEventListener('DOMContentLoaded', () => {
     // Initial render
     render();
 });
+
