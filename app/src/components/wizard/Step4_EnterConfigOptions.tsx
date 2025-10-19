@@ -3,13 +3,14 @@
 import React, { useState } from 'react';
 import { StepProps } from './stepProps';
 
+// Define the new structure for a single config option
 type ConfigType = 'string' | 'bool' | 'int' | 'float' | 'secret';
-// Define the structure for a single config option
+
 interface ConfigOption {
   key: string;
   type: ConfigType;
   value: string; // Default Value
-  isOptional: boolean; // NEW
+  isOptional: boolean;
 }
 
 const Step4_EnterConfigOptions: React.FC<StepProps> = ({ onComplete }) => {
@@ -20,7 +21,7 @@ const Step4_EnterConfigOptions: React.FC<StepProps> = ({ onComplete }) => {
   const [newKey, setNewKey] = useState('');
   const [newType, setNewType] = useState<ConfigType>('string');
   const [newValue, setNewValue] = useState('');
-  const [newIsOptional, setNewIsOptional] = useState(true);
+  const [newIsOptional, setNewIsOptional] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   /**
@@ -28,16 +29,23 @@ const Step4_EnterConfigOptions: React.FC<StepProps> = ({ onComplete }) => {
    */
   const handleAddOption = () => {
     setError(null);
+    
     // Basic validation
     if (!newKey.trim()) {
-      setError('Key cannot be empty.');
+      setError('Config option name cannot be empty.');
       return;
     }
-    // Check for duplicate keys
     if (options.some(opt => opt.key.toLowerCase() === newKey.trim().toLowerCase())) {
       setError('Key must be unique.');
       return;
     }
+
+    // Check: Non-optional (required) configs cannot have a default value.
+    if (!newIsOptional && newValue.trim() !== '') {
+      setError('Required configs (non-optional) cannot have a default value.');
+      return;
+    }
+    // --- END NEW VALIDATION ---
 
     // Add the new option to the list
     setOptions([
@@ -46,7 +54,7 @@ const Step4_EnterConfigOptions: React.FC<StepProps> = ({ onComplete }) => {
         key: newKey.trim(), 
         type: newType, 
         value: newValue.trim(),
-        isOptional: newIsOptional // NEW
+        isOptional: newIsOptional
       }
     ]);
 
@@ -54,7 +62,7 @@ const Step4_EnterConfigOptions: React.FC<StepProps> = ({ onComplete }) => {
     setNewKey('');
     setNewValue('');
     setNewType('string');
-    setNewIsOptional(true);
+    setNewIsOptional(false);
   };
 
   /**
@@ -68,8 +76,7 @@ const Step4_EnterConfigOptions: React.FC<StepProps> = ({ onComplete }) => {
    * Passes the final list of options to the parent wizard
    */
   const handleNext = () => {
-    // We'll pass the array of objects as 'configOptions'
-    // You can also transform this into an object map if you prefer
+    // Pass the full array of option objects
     onComplete({ configOptions: options });
   };
 
@@ -83,7 +90,7 @@ const Step4_EnterConfigOptions: React.FC<StepProps> = ({ onComplete }) => {
           <div className="config-row header">
             <span>Key</span>
             <span>Type</span>
-            <span>Optional</span> {/* NEW */}
+            <span>Optional</span>
             <span>Default Value</span>
             <span>Action</span>
           </div>
@@ -92,7 +99,7 @@ const Step4_EnterConfigOptions: React.FC<StepProps> = ({ onComplete }) => {
           <div key={option.key} className="config-row">
             <span title={option.key}>{option.key}</span>
             <span>{option.type}</span>
-            <span>{option.isOptional ? 'Yes' : 'No'}</span> {/* NEW */}
+            <span>{option.isOptional ? 'Yes' : 'No'}</span>
             <span title={option.value}>{option.value}</span>
             <button 
               onClick={() => handleRemoveOption(option.key)} 
@@ -120,10 +127,9 @@ const Step4_EnterConfigOptions: React.FC<StepProps> = ({ onComplete }) => {
           <option value="bool">bool</option>
           <option value="int">int</option>
           <option value="float">float</option>
-          <option value="secret">secret</option> {/* FIXED */}
+          <option value="secret">secret</option>
         </select>
         
-        {/* NEW CHECKBOX */}
         <label className="config-checkbox-label">
           <input
             type="checkbox"
