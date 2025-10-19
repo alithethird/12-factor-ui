@@ -5,14 +5,14 @@ import AccordionStep from './AccordionStep';
 import Step1_SelectFramework from './Step1_SelectFramework';
 import Step2_UploadCode from './Step2_UploadCode';
 import Step3_SelectIntegrations from './Step3_SelectIntegrations';
-import Step4_EnterEnvVars from './Step4_EnterEnvVars';
+import Step4_EnterConfigOptions from './Step4_EnterConfigOptions';
 import Step5_GetFiles from './Step5_GetFiles';
 import './Wizard.css';
 
 const MultiStepWizard: React.FC = () => {
   // State to track which step is currently open
   const [activeStep, setActiveStep] = useState(1);
-  
+
   // State to hold all the data collected from the steps
   const [formData, setFormData] = useState({
     framework: '',
@@ -31,7 +31,7 @@ const MultiStepWizard: React.FC = () => {
   const handleStepComplete = (stepNumber: number, data: any) => {
     // You can update the main formData state here based on the step
     console.log(`Step ${stepNumber} complete with data:`, data);
-    
+
     setFormData(prevData => ({
       ...prevData,
       ...data,
@@ -43,10 +43,10 @@ const MultiStepWizard: React.FC = () => {
       setActiveStep(stepNumber + 1);
     }
   };
-/**
-   * Allows the user to click on a previous step header to go back.
-   * We only allow jumping to steps <= the current activeStep.
-   */
+  /**
+     * Allows the user to click on a previous step header to go back.
+     * We only allow jumping to steps <= the current activeStep.
+     */
   const handleSetStep = (targetStep: number) => {
     if (targetStep <= activeStep) {
       setActiveStep(targetStep);
@@ -60,8 +60,8 @@ const MultiStepWizard: React.FC = () => {
         activeStep={activeStep}
         onHeaderClick={handleSetStep}
         summaryTitle={
-          formData.frameworkName 
-            ? `Selected Framework: ${formData.frameworkName}` 
+          formData.frameworkName
+            ? `Selected Framework: ${formData.frameworkName}`
             : undefined
         }
       >
@@ -76,8 +76,8 @@ const MultiStepWizard: React.FC = () => {
         activeStep={activeStep}
         onHeaderClick={handleSetStep}
         summaryTitle={
-          formData.sourceProjectName 
-            ? `Source: ${formData.sourceProjectName}` 
+          formData.sourceProjectName
+            ? `Source: ${formData.sourceProjectName}`
             : undefined
         }
       >
@@ -92,9 +92,15 @@ const MultiStepWizard: React.FC = () => {
         stepNumber={3}
         activeStep={activeStep}
         onHeaderClick={handleSetStep}
+        summaryTitle={
+          formData.integrations.length > 0
+            ? `${formData.integrations.length} Integration(s) Selected`
+            : undefined // Uses default title if 0 are selected
+        }
       >
         <Step3_SelectIntegrations
           onComplete={(data) => handleStepComplete(3, data)}
+        // We don't need to pass framework here, but could if needed
         />
       </AccordionStep>
 
@@ -104,7 +110,7 @@ const MultiStepWizard: React.FC = () => {
         activeStep={activeStep}
         onHeaderClick={handleSetStep}
       >
-        <Step4_EnterEnvVars
+        <Step4_EnterConfigOptions
           onComplete={(data) => handleStepComplete(4, data)}
         />
       </AccordionStep>
@@ -115,7 +121,7 @@ const MultiStepWizard: React.FC = () => {
         activeStep={activeStep}
         onHeaderClick={handleSetStep}
       >
-        <Step5_GetFiles 
+        <Step5_GetFiles
           allData={formData} // Pass all collected data to the final step
         />
       </AccordionStep>

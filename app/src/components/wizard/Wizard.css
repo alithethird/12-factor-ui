@@ -207,3 +207,63 @@
   color: #d8000c;
   border-radius: 4px;
 }
+
+/* --- STYLES FOR STEP 3 INTEGRATIONS --- */
+
+.integration-grid {
+  display: grid;
+  /* One column by default, two columns on wider screens */
+  grid-template-columns: 1fr;
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+
+/* Use 2 columns on screens 600px and wider */
+@media (min-width: 600px) {
+  .integration-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+.integration-item {
+  display: flex;
+  align-items: flex-start; /* Aligns checkbox with the top of the text */
+  gap: 0.75rem;
+  padding: 1rem;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease-in-out;
+  background-color: #fff;
+}
+
+.integration-item:hover {
+  border-color: #007bff;
+  background-color: #fcfcfc;
+}
+
+/* Style the checkbox itself */
+.integration-item input[type="checkbox"] {
+  width: 1.25rem;
+  height: 1.25rem;
+  margin-top: 0.2rem; /* Minor alignment tweak */
+  accent-color: #007bff; /* Color the checkmark and box */
+  flex-shrink: 0; /* Prevent checkbox from shrinking */
+}
+
+.integration-info {
+  display: flex;
+  flex-direction: column;
+}
+
+.integration-name {
+  font-weight: 600;
+  color: #333;
+  font-size: 1rem;
+}
+
+.integration-desc {
+  font-size: 0.9rem;
+  color: #666;
+  line-height: 1.3;
+}

@@ -1,9 +1,9 @@
-// src/components/wizard/Step4_EnterEnvVars.tsx
+// src/components/wizard/Step4_EnterConfigOptions.tsx
 
 import React from 'react';
 import { StepProps } from './stepProps';
 
-const Step4_EnterEnvVars: React.FC<StepProps> = ({ onComplete }) => {
+const Step4_EnterConfigOptions: React.FC<StepProps> = ({ onComplete }) => {
   // Logic to manage a list of key-value pairs
 
   const handleNext = () => {
@@ -12,7 +12,7 @@ const Step4_EnterEnvVars: React.FC<StepProps> = ({ onComplete }) => {
 
   return (
     <div className="step-content">
-      <p>Enter any custom environment variables:</p>
+      <p>Enter any custom config options:</p>
       {/* Add a key-value pair editor component here */}
       <div>
         <input type="text" placeholder="Key (e.g., SECRET_KEY)" />
@@ -24,4 +24,4 @@ const Step4_EnterEnvVars: React.FC<StepProps> = ({ onComplete }) => {
   );
 };
 
-export default Step4_EnterEnvVars;
+export default Step4_EnterConfigOptions;
