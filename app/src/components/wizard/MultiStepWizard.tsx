@@ -19,6 +19,7 @@ const MultiStepWizard: React.FC = () => {
     frameworkName: '',
     source: null,
     sourceProjectName: '',
+    jobId: '',
     integrations: [],
     configOptions: [],
   });
@@ -32,11 +33,17 @@ const MultiStepWizard: React.FC = () => {
     // You can update the main formData state here based on the step
     console.log(`Step ${stepNumber} complete with data:`, data);
 
-    setFormData(prevData => ({
-      ...prevData,
-      ...data,
-      sourceProjectName: data.source?.projectName || prevData.sourceProjectName,
-    }));
+  setFormData(prevData => {
+      const updatedData = { ...prevData, ...data };
+      
+      // If Step 2 completed, it sent { source: {...}, jobId: '...' }
+      // Extract the projectName from the source object
+      if (data.source) {
+        updatedData.sourceProjectName = data.source.projectName || '';
+      }
+      
+      return updatedData;
+    });
 
     // Unfold the next step
     if (stepNumber < 5) {

@@ -7,7 +7,10 @@ import path from 'path';
 import fs from 'fs';
 import { exec } from 'child_process';
 import tmp from 'tmp'; // For creating secure temporary directories
-
+import archiver from 'archiver';
+import { RockcraftGenerator } from './rockcraft';
+import { CharmcraftGenerator } from './charmcraft';
+import { v4 as uuidv4 } from 'uuid';
 // --- 1. Setup Express & Middleware ---
 
 const app = express();
@@ -16,6 +19,11 @@ const port = 8080; // The port your React app will call
 // Enable CORS for your React app
 app.use(cors({ origin: 'http://localhost:5173' })); // Adjust if your React port is different
 app.use(express.json());
+
+// This map holds active jobs. This is NOT production-safe
+// as it will be cleared on server restart.
+// A real app would use a database or Redis here.
+const jobMap = new Map<string, { path: string; cleanup: () => void }>();
 
 // Configure Multer for file uploads
 // We'll save uploads to the OS's temporary directory
@@ -277,14 +285,18 @@ app.post('/api/validate-github', async (req: Request, res: Response) => {
     }
     const projectName = repoUrl.split('/').pop()?.replace('.git', '') || 'GitHub Repo';
     // 3. Success
+
+    const jobId = uuidv4(); // Generate a unique ID
+    jobMap.set(jobId, { path: folderPath, cleanup }); // Store the job
+
     res.json({
       success: true,
+      jobId: jobId,
       sourceData: { type: 'github', url: repoUrl, projectName: projectName, },
     });
   } catch (error: any) {
+    cleanup();
     res.status(400).json({ success: false, error: error.message });
-  } finally {
-    cleanup(); // Clean up the temp directory
   }
 });
 
@@ -300,6 +312,11 @@ app.post('/api/validate-upload', upload.single('file'), async (req: Request, res
   }
 
   let extractCleanup: () => void = () => { };
+  let uploadCleanup: () => void = () => {
+    if (file) fs.unlink(file.path, (err) => {
+      if (err) console.error(`Failed to delete uploaded file: ${file.path}`, err);
+    });
+  };
 
   try {
     // 1. Extract
@@ -307,50 +324,44 @@ app.post('/api/validate-upload', upload.single('file'), async (req: Request, res
     const { folderPath, cleanup } = await extractor.extract();
     extractCleanup = cleanup;
 
-    let projectPath = folderPath;
-    let projectName = file.originalname.replace('.zip', '').replace('.tar.gz', '').replace('.tar', ''); // Default
+    let { projectPath, projectName } = findProjectRoot(folderPath, file.originalname);
 
-    // Read the contents of the extracted directory
-    const rootItems = fs.readdirSync(folderPath).filter(name =>
-      !name.startsWith('.') && name !== '__MACOSX'
-    );
-
-    // If there is exactly one item, and it's a directory, use it as the project path
-    if (rootItems.length === 1) {
-      const singleItemPath = path.join(folderPath, rootItems[0]);
-      if (fs.statSync(singleItemPath).isDirectory()) {
-        projectPath = singleItemPath; // This is the real project path
-        projectName = rootItems[0];   // This is the real project name
-      }
-    }
-    // Else: we assume it's a "rootless" archive, so folderPath is correct.
-    // 2. Validate
     const processor = new ApplicationProcessor(projectPath, framework);
     const result = await processor.checkProject();
+    if (!result.valid) throw new Error(result.error);
 
-    if (!result.valid) {
-      throw new Error(result.error || 'Project validation failed.');
-    }
+    // --- SUCCESS ---
+    const jobId = uuidv4();
+    // We store the *original* extracted path for cleanup,
+    // but the *actual* project path for generation.
+    jobMap.set(jobId, { path: projectPath, cleanup: extractCleanup });
 
-    // 3. Success
     res.json({
       success: true,
-      sourceData: { type: 'upload', fileName: file.originalname, projectName: projectName, },
+      jobId: jobId, // Return the ID
+      sourceData: { type: 'upload', fileName: file.originalname, projectName },
     });
   } catch (error: any) {
+    extractCleanup(); // <-- Clean up *only* on error
     res.status(400).json({ success: false, error: error.message });
   } finally {
-    // Clean up the extracted folder
-    extractCleanup();
-    // Clean up the original upload file
-    if (file) {
-      fs.unlink(file.path, (err) => {
-        if (err) console.error(`Failed to delete uploaded file: ${file.path}`, err);
-      });
-    }
+    uploadCleanup(); // Always delete the uploaded .zip/.tar
   }
 });
+/**
+ * Helper to find the nested project root (moved from old code)
+ */
+function findProjectRoot(folderPath: string, originalFileName: string) {
+  let projectPath = folderPath;
+  let projectName = originalFileName.replace('.zip', '').replace('.tar.gz', '').replace('.tar', '');
 
+  const rootItems = fs.readdirSync(folderPath).filter(name => !name.startsWith('.') && name !== '__MACOSX');
+  if (rootItems.length === 1 && fs.statSync(path.join(folderPath, rootItems[0])).isDirectory()) {
+    projectPath = path.join(folderPath, rootItems[0]);
+    projectName = rootItems[0];
+  }
+  return { projectPath, projectName };
+}
 // --- 5. Global Error Handler & Server Start ---
 
 // Basic global error handler
@@ -361,4 +372,84 @@ app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
 
 app.listen(port, () => {
   console.log(`🚀 Backend server listening at http://localhost:${port}`);
+});
+
+app.post('/api/generate-files', async (req: Request, res: Response) => {
+  const formData = req.body;
+  const jobId = formData.jobId; // Get Job ID from frontend
+
+  if (!jobId) {
+    return res.status(400).json({ success: false, error: 'Missing Job ID.' });
+  }
+  console.log('[Server] Received generation request:', formData);
+// --- 1. Look up the job ---
+  const job = jobMap.get(jobId);
+  if (!job) {
+    return res.status(404).json({ success: false, error: 'Job not found or expired. Please go back to Step 2.' });
+  }
+const { path: projectPath, cleanup: projectCleanup } = job;
+  let charmCleanup: () => void = () => {};
+  let zipCleanup: () => void = () => {};
+
+  try {
+  // --- 2. Generate Rock (using existing path) ---
+    const rockGenerator = new RockcraftGenerator(projectPath);
+    await rockGenerator.init();
+    const rockFilePath = await rockGenerator.pack();
+
+// --- 3. Generate Charm (same as before) ---
+    const { path: charmDir, cleanup: charmDirCleanup } = await createTempDir();
+    charmCleanup = charmDirCleanup;
+    const charmGenerator = new CharmcraftGenerator(charmDir, {
+      integrations: formData.integrations,
+      configOptions: formData.configOptions,
+      projectName: formData.sourceProjectName || 'my-charm',
+    });
+    await charmGenerator.init();
+    await charmGenerator.update();
+    const charmFilePath = await charmGenerator.pack();
+    
+    // --- 4. Zip the artifacts ---
+    const { path: zipDir, cleanup: zipDirCleanup } = await createTempDir();
+    zipCleanup = zipDirCleanup;
+    const zipFilePath = path.join(zipDir, 'rock-and-charm-bundle.zip');
+
+    const output = fs.createWriteStream(zipFilePath);
+    const archive = archiver('zip', { zlib: { level: 9 } });
+
+    output.on('close', () => {
+      console.log(`[Server] Zip file created: ${zipFilePath} (${archive.pointer()} total bytes)`);
+      // Send the file for download
+      res.download(zipFilePath, 'rock-and-charm-bundle.zip', (err) => {
+        if (err) {
+          console.error('[Server] Zip download error:', err);
+        }
+        // --- 5. Final Cleanup ---
+        console.log('[Server] Cleaning up all temporary directories...');
+        projectCleanup();
+        charmCleanup();
+        zipCleanup();
+        jobMap.delete(jobId);
+      });
+    });
+
+    archive.on('error', (err) => { throw err; });
+    archive.pipe(output);
+
+    // Add files to zip
+    archive.file(rockFilePath, { name: path.basename(rockFilePath) });
+    archive.file(charmFilePath, { name: path.basename(charmFilePath) });
+
+    console.log('[Server] Finalizing zip file...');
+    await archive.finalize();
+
+  } catch (error: any) {
+    console.error('[Server] /api/generate-files error:', error);
+    // Clean up on error
+    projectCleanup();
+    charmCleanup();
+    zipCleanup();
+    jobMap.delete(jobId);
+    res.status(500).json({ success: false, error: error.message });
+  }
 });

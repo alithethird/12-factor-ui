@@ -44,8 +44,11 @@ const Step2_UploadCode: React.FC<StepProps> = ({ onComplete, framework }) => {
         result = await handleUploadSubmit();
       }
 
-      // If successful, complete the step
-      onComplete({ source: result.sourceData });
+// Success! Pass the job ID and source data to the parent
+      onComplete({ 
+        source: result.sourceData,
+        jobId: result.jobId // Pass the Job ID
+      });
 
     } catch (err: any) {
       console.error(err);
@@ -58,53 +61,37 @@ const Step2_UploadCode: React.FC<StepProps> = ({ onComplete, framework }) => {
   /**
    * Handles the API call for GitHub validation
    */
-  const handleGithubSubmit = async () => {
+const handleGithubSubmit = async () => {
     if (!repoUrl) throw new Error('Please enter a GitHub URL.');
-
     const response = await fetch(`${API_BASE_URL}/api/validate-github`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        repoUrl: repoUrl,
-        framework: framework,
-      }),
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ repoUrl, framework }),
     });
-
     const result = await response.json();
-
     if (!response.ok || !result.success) {
       throw new Error(result.error || 'GitHub validation failed.');
     }
-
-    return result; // { success: true, sourceData: { ... } }
+    return result; // { success, jobId, sourceData }
   };
 
   /**
    * Handles the API call for file upload validation
    */
-  const handleUploadSubmit = async () => {
+const handleUploadSubmit = async () => {
     if (!file) throw new Error('Please select a file to upload.');
-
     const formData = new FormData();
     formData.append('file', file);
-    formData.append('framework', framework as string); // Add framework to the form data
-
+    formData.append('framework', framework as string);
     const response = await fetch(`${API_BASE_URL}/api/validate-upload`, {
       method: 'POST',
       body: formData,
-      // NOTE: Do NOT set 'Content-Type' for FormData,
-      // the browser sets it automatically with the correct boundary
     });
-
     const result = await response.json();
-
     if (!response.ok || !result.success) {
       throw new Error(result.error || 'File validation failed.');
     }
-
-    return result; // { success: true, sourceData: { ... } }
+    return result; // { success, jobId, sourceData }
   };
 
 

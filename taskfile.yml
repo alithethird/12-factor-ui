@@ -59,13 +59,13 @@ tasks:
     deps: [install-docker]
     sources:
       - Dockerfile
+      - entrypoint.sh # Add entrypoint.sh as a source
       - app/package.json
       - app/bun.lock
     status:
       - test `docker images -q $IMAGE_NAME`
     cmds:
       - docker build --build-arg BUILD_ENV=$BUILD_ENV -t $IMAGE_NAME .
-
   remove:
     desc: "Remove the Docker image and all related containers"
     deps: [install-docker]
@@ -86,7 +86,7 @@ tasks:
       - task: remove
       - task: build
       - echo "Images rebuilt successfully"
-
+  
   start:
     desc: "Start the Docker container for development"
     deps: [build]
@@ -96,21 +96,24 @@ tasks:
     cmds:
       - docker rm -f $IMAGE_NAME 2>/dev/null || true
       - |
+        # --- THIS IS THE FIX ---
+        # Removed 'tail -f /dev/null' to let the ENTRYPOINT run
         docker run -d --name $IMAGE_NAME \
+          --privileged \
           -v $PWD:/srv \
           -v /srv/node_modules \
           -w /srv/app \
           -p $FRONTEND_PORT:$FRONTEND_PORT \
           -p $BACKEND_PORT:$BACKEND_PORT \
           -e PORT=$BACKEND_PORT \
-          $IMAGE_NAME tail -f /dev/null
+          -e BUILD_ENV=$BUILD_ENV \
+          $IMAGE_NAME
 
   stop:
     desc: "Stop and remove the Docker container"
     cmds:
       - docker stop $IMAGE_NAME 2>/dev/null || true
       - docker rm $IMAGE_NAME 2>/dev/null || true
-
   watch:frontend:
     desc: "Watch and build frontend code changes"
     deps: [start]
@@ -130,10 +133,12 @@ tasks:
       - docker exec -w /srv/app $IMAGE_NAME bash -c 'bun run dev' | sed "s/^/[frontend-server] /"
 
   serve:backend:
-    desc: "Start the backend development server"
+    desc: "Stream the backend development server logs"
     deps: [start]
     cmds:
-      - docker exec -w /srv/app $IMAGE_NAME bash -c 'nodemon --exec "node dist/server/server.js"' | sed "s/^/[backend-server] /"
+      # --- THIS IS THE FIX ---
+      # We now stream the logs from the container, which is running nodemon
+      - docker logs -f $IMAGE_NAME 2>&1 | sed "s/^/[backend-server] /"
 
   serve:
     desc: "Start both frontend and backend servers with hot reloading"
