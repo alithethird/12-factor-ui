@@ -58,7 +58,7 @@ function createTempDir(): Promise<{ path: string; cleanup: () => void }> {
  * Downloads a GitHub repository to a temporary folder.
  */
 class GithubDownloader {
-  constructor(private repoUrl: string) {}
+  constructor(private repoUrl: string) { }
 
   public async download(): Promise<{ folderPath: string; cleanup: () => void }> {
     const { path: tempDir, cleanup } = await createTempDir();
@@ -66,9 +66,9 @@ class GithubDownloader {
 
     // Use --depth 1 to only get the latest commit, which is much faster
     const command = `git clone --depth 1 ${this.repoUrl} ${tempDir}`;
-    
+
     await runCommand(command);
-    
+
     console.log(`Successfully cloned to ${tempDir}`);
     return { folderPath: tempDir, cleanup };
   }
@@ -78,7 +78,7 @@ class GithubDownloader {
  * Extracts a .zip or .tar.gz file to a temporary folder.
  */
 class ArchiveExtractor {
-  constructor(private file: Express.Multer.File) {}
+  constructor(private file: Express.Multer.File) { }
 
   public async extract(): Promise<{ folderPath: string; cleanup: () => void }> {
     const { path: tempDir, cleanup } = await createTempDir();
@@ -92,7 +92,7 @@ class ArchiveExtractor {
 
     if (fileType === 'application/zip' || filePath.endsWith('.zip')) {
       command = `unzip ${filePath} -d ${tempDir}`;
-    } else if ( fileType === 'application/gzip' || filePath.endsWith('.tar.gz')) {
+    } else if (fileType === 'application/gzip' || filePath.endsWith('.tar.gz')) {
       command = `tar -xzf ${filePath} -C ${tempDir}`;
     } else if (fileType === 'application/x-tar' || filePath.endsWith('.tar')) {
       command = `tar -xf ${filePath} -C ${tempDir}`;
@@ -102,21 +102,21 @@ class ArchiveExtractor {
     }
 
     await runCommand(command);
-    
+
     console.log(`Successfully extracted to ${tempDir}`);
     return { folderPath: tempDir, cleanup };
   }
 }
-  type CheckResult = {
-    valid: boolean;
-    error?: string;
-  };
+type CheckResult = {
+  valid: boolean;
+  error?: string;
+};
 
 /**
  * Checks the project structure based on the selected framework.
  */
 class ApplicationProcessor {
-  constructor(private folderPath: string, private framework: string) {}
+  constructor(private folderPath: string, private framework: string) { }
 
 
   public async checkProject(): Promise<CheckResult> {
@@ -140,31 +140,78 @@ class ApplicationProcessor {
       return fs.existsSync(path.join(this.folderPath, fileName));
     };
 
+    const checkRequirements = (requirementsPath, packageName) => {
+      if (!requirementsPath || !packageName) {
+        return false;
+      }
+
+      // 1. Sanitize the package name for use in a RegExp
+      const escapedPackageName = packageName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+      // 2. Create a Regular Expression to find the package.
+      // This regex looks for:
+      // ^\s* : Start of line, allowing for leading whitespace.
+      // ${...}     : The escaped package name.
+      // (?:\s* : Non-capturing group for what follows the name (optional).
+      // (?:[<=>!~] : Looks for version specifiers (==, >=, <=, !=, ~)
+      // |#.*)      : OR a comment (# and anything after it).
+      // )?         : Makes the whole trailing part optional.
+      // $          : End of the package entry (or line).
+      // i          : Case-insensitive search.
+      // m          : Multiline mode, so '^' and '$' match start/end of lines.
+
+      // Key parts of the regex logic:
+      // - \s* means 0 or more spaces.
+      // - (?:...|...) ensures we stop matching when we hit a version specifier or a comment.
+      // - If no specifier or comment is present, it looks for the end of the line.
+
+      const packageRegex = new RegExp(
+        `^\\s*${escapedPackageName}(?:\\s*(?:[<=>!~].*|#.*))?$`,
+        'im'
+      );
+
+      // 3. Normalize content: Remove blank lines and lines starting with a comment, 
+      //    and then check for a match.
+      // Note: The regex with 'm' flag is powerful enough to handle most cases 
+      // without heavy pre-processing, but trimming is useful.
+      const requirementsContent = fs.readFileSync(requirementsPath, 'utf-8');
+      const lines = requirementsContent.split('\n');
+
+      console.log(lines);
+      // Filter out blank lines and full-line comments before checking
+      const relevantContent = lines
+        .map(line => line.trim())
+        .filter(line => line.length > 0 && !line.startsWith('#'))
+        .join('\n');
+
+      return packageRegex.test(relevantContent);
+    };
+
     switch (this.framework) {
       case 'flask':
         // Check for 'requirements.txt' or 'app.py'
-        if (!fileExists('requirements.txt') && !fileExists('app.py')) {
+        if (!fileExists('requirements.txt') || !fileExists('app.py') || !checkRequirements(path.join(this.folderPath, "requirements.txt"), "flask")) {
           return { valid: false, error: "Project missing 'requirements.txt' or 'app.py'." };
         }
         return { valid: true };
 
       case 'django':
         // Check for 'manage.py'
-        if (!fileExists('manage.py')) {
+        if (!fileExists('requirements.txt') || !checkRequirements(path.join(this.folderPath, "requirements.txt"), "django")) {
           return { valid: false, error: "Project missing 'manage.py' at root." };
         }
         return { valid: true };
 
       case 'fastapi':
         // Check for 'main.py'
-        if (!fileExists('main.py')) {
-          return { valid: false, error: "Project missing 'main.py' at root." };
+        if (!fileExists('requirements.txt') || !fileExists('app.py') || !checkRequirements(path.join(this.folderPath, "requirements.txt"), "fastapi")) {
+          return { valid: false, error: "Project missing 'app.py' at root." };
         }
         return { valid: true };
 
       case 'go':
         // Check for 'go.mod'
-        if (!fileExists('go.mod')) {
+        if (!fileExists('go.mod') || !fileExists('go.sum')) {
           return { valid: false, error: "Project missing 'go.mod' file." };
         }
         return { valid: true };
@@ -174,8 +221,19 @@ class ApplicationProcessor {
         if (!fileExists('package.json')) {
           return { valid: false, error: "Project missing 'package.json'." };
         }
-        // You could even read the file to check for 'express' dependency
-        return { valid: true };
+        const packageJsonPath = path.join(this.folderPath, 'package.json');
+        const fileContent = fs.readFileSync(packageJsonPath, 'utf-8');
+        const packageJson = JSON.parse(fileContent);
+        const scripts = packageJson.scripts;
+
+        console.log('[DEBUG] Found scripts in package.json:', scripts);
+
+        if (scripts && scripts.start) {
+          console.log("[DEBUG] Found 'start' script.");
+          return { valid: true }; // Success!
+        } else {
+          return { valid: false, error: "The 'package.json' is missing a 'start' script." };
+        }
 
       case 'springboot':
         // Check for 'pom.xml' or 'build.gradle'
@@ -197,13 +255,13 @@ class ApplicationProcessor {
  */
 app.post('/api/validate-github', async (req: Request, res: Response) => {
   const { repoUrl, framework } = req.body;
-  
+
   if (!repoUrl || !framework) {
     return res.status(400).json({ success: false, error: 'Missing repoUrl or framework.' });
   }
 
-  let cleanup: () => void = () => {}; // No-op cleanup function
-  
+  let cleanup: () => void = () => { }; // No-op cleanup function
+
   try {
     // 1. Download
     const downloader = new GithubDownloader(repoUrl);
@@ -217,11 +275,11 @@ app.post('/api/validate-github', async (req: Request, res: Response) => {
     if (!result.valid) {
       throw new Error(result.error || 'Project validation failed.');
     }
-const projectName = repoUrl.split('/').pop()?.replace('.git', '') || 'GitHub Repo';
+    const projectName = repoUrl.split('/').pop()?.replace('.git', '') || 'GitHub Repo';
     // 3. Success
     res.json({
       success: true,
-      sourceData: { type: 'github', url: repoUrl,projectName: projectName, },
+      sourceData: { type: 'github', url: repoUrl, projectName: projectName, },
     });
   } catch (error: any) {
     res.status(400).json({ success: false, error: error.message });
@@ -241,7 +299,7 @@ app.post('/api/validate-upload', upload.single('file'), async (req: Request, res
     return res.status(400).json({ success: false, error: 'Missing file or framework.' });
   }
 
-  let extractCleanup: () => void = () => {};
+  let extractCleanup: () => void = () => { };
 
   try {
     // 1. Extract
@@ -252,8 +310,8 @@ app.post('/api/validate-upload', upload.single('file'), async (req: Request, res
     let projectPath = folderPath;
     let projectName = file.originalname.replace('.zip', '').replace('.tar.gz', '').replace('.tar', ''); // Default
 
-// Read the contents of the extracted directory
-    const rootItems = fs.readdirSync(folderPath).filter(name => 
+    // Read the contents of the extracted directory
+    const rootItems = fs.readdirSync(folderPath).filter(name =>
       !name.startsWith('.') && name !== '__MACOSX'
     );
 
