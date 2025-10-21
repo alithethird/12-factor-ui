@@ -1,0 +1,47 @@
+[
+    {
+        "id": "prometheus",
+        "name": "Prometheus",
+        "description": "Monitoring & alerting"
+    },
+    {
+        "id": "grafana",
+        "name": "Grafana",
+        "description": "Visualization dashboard"
+    },
+    {
+        "id": "ingress",
+        "name": "Ingress",
+        "description": "Expose your app via HTTP/S"
+    },
+    {
+        "id": "loki",
+        "name": "Loki",
+        "description": "Log aggregation system"
+    },
+    {
+        "id": "postgresql",
+        "name": "PostgreSQL",
+        "description": "SQL database relation"
+    },
+    {
+        "id": "tracing",
+        "name": "Tracing",
+        "description": "Distributed tracing (e.g., Jaeger)"
+    },
+    {
+        "id": "smtp",
+        "name": "SMTP",
+        "description": "Email sending integration"
+    },
+    {
+        "id": "openfga",
+        "name": "OpenFGA",
+        "description": "Fine-grained authorization"
+    },
+    {
+        "id": "oidc",
+        "name": "OIDC",
+        "description": "User authentication"
+    }
+]

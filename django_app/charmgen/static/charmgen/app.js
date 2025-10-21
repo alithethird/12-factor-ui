@@ -15,9 +15,9 @@ document.addEventListener('DOMContentLoaded', () => {
         };
         notification.className = `w-64 text-white px-4 py-3 rounded-lg shadow-xl animate-fade-in ${colors[type]}`;
         notification.textContent = message;
-        
+
         notificationContainer.prepend(notification);
-        
+
         setTimeout(() => {
             notification.classList.add('animate-fade-out');
             notification.addEventListener('animationend', () => {
@@ -72,11 +72,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
     async function render() {
         wizardContainer.innerHTML = '';
-        wizardContainer.appendChild(await renderStep1());
-        wizardContainer.appendChild(renderStep2());
-        wizardContainer.appendChild(renderStep3());
-        wizardContainer.appendChild(renderStep4());
-        wizardContainer.appendChild(renderStep5());
+        wizardContainer.appendChild(await renderSelectFramework());
+        wizardContainer.appendChild(renderUploadProject());
+        wizardContainer.appendChild(await renderSelectIntegrations());
+        wizardContainer.appendChild(renderCustomizeConfigOptions());
+        wizardContainer.appendChild(renderGenerate());
     }
 
     function createAccordionStep(title, stepNumber, summaryTitle, contentEl) {
@@ -105,12 +105,12 @@ document.addEventListener('DOMContentLoaded', () => {
         return wrapper;
     }
 
-    async function renderStep1() {
+    async function renderSelectFramework() {
         const content = document.createElement('div');
         content.innerHTML = `<p class="mb-4">Select your project's framework:</p>`;
         const grid = document.createElement('div');
         grid.className = 'grid grid-cols-2 md:grid-cols-4 gap-4';
-        
+
         try {
             const response = await fetch('/static/charmgen/frameworks.json');
             if (!response.ok) throw new Error('Failed to load frameworks.json.');
@@ -119,7 +119,7 @@ document.addEventListener('DOMContentLoaded', () => {
             frameworks.forEach(fw => {
                 const card = document.createElement('div');
                 card.className = `framework-card p-4 border-2 rounded-lg cursor-pointer text-center hover:border-blue-500 flex flex-col items-center justify-center space-y-2 ${state.formData.framework === fw.id ? 'selected' : ''}`;
-                
+
                 const img = document.createElement('img');
                 img.src = fw.logo_url;
                 img.alt = `${fw.name} Logo`;
@@ -142,14 +142,14 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (err) {
             grid.innerHTML = `<p class="text-red-500">Error loading frameworks: ${err.message}</p>`;
         }
-        
+
         content.appendChild(grid);
-        
+
         const summaryTitle = state.formData.frameworkName ? `Framework: ${state.formData.frameworkName}` : null;
         return createAccordionStep('1. Select Framework', 1, summaryTitle, content);
     }
 
-    function renderStep2() {
+    function renderUploadProject() {
         const content = document.createElement('div');
         let sourceType = 'github';
 
@@ -177,7 +177,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 sourceType = e.target.dataset.type;
                 updateView();
             }));
-            
+
             content.querySelector('#validate-btn').addEventListener('click', handleValidation);
         };
 
@@ -191,7 +191,7 @@ document.addEventListener('DOMContentLoaded', () => {
             try {
                 let response;
                 let body;
-                let headers = {'X-CSRFToken': csrftoken};
+                let headers = { 'X-CSRFToken': csrftoken };
 
                 if (sourceType === 'github') {
                     body = JSON.stringify({ repoUrl: content.querySelector('#repoUrl').value, framework: state.formData.framework });
@@ -203,13 +203,13 @@ document.addEventListener('DOMContentLoaded', () => {
                     body.append('file', file);
                     body.append('framework', state.formData.framework);
                 }
-                
+
                 response = await fetch('/api/validate-source/', { method: 'POST', body, headers });
                 const result = await response.json();
                 if (!response.ok) throw new Error(result.error || 'Validation failed');
-                
+
                 setState({
-                    formData: { ...state.formData, jobId: result.jobId, source: { type: sourceType, projectName: result.projectName }},
+                    formData: { ...state.formData, jobId: result.jobId, source: { type: sourceType, projectName: result.projectName } },
                     activeStep: 3
                 });
 
@@ -220,60 +220,67 @@ document.addEventListener('DOMContentLoaded', () => {
                 btn.disabled = false;
             }
         };
-        
+
         updateView();
-        const summaryTitle = state.formData.source ? `Source: ${state.formData.source.projectName}`: null;
+        const summaryTitle = state.formData.source ? `Source: ${state.formData.source.projectName}` : null;
         return createAccordionStep('2. Provide Source Code', 2, summaryTitle, content);
     }
 
-    function renderStep3() {
-        const integrations = [
-            { id: 'prometheus', name: 'Prometheus', description: 'Monitoring & alerting' },
-            { id: 'grafana', name: 'Grafana', description: 'Visualization dashboard' },
-            { id: 'postgresql', name: 'PostgreSQL', description: 'SQL database relation' },
-        ];
+    async function renderSelectIntegrations() {
         const content = document.createElement('div');
         content.innerHTML = `<p class="mb-4">Select integrations:</p>`;
         const grid = document.createElement('div');
         grid.className = 'grid md:grid-cols-2 gap-4';
 
-        integrations.forEach(item => {
-            const label = document.createElement('label');
-            label.className = 'flex items-start gap-3 p-4 border rounded-lg cursor-pointer';
-            label.innerHTML = `
+        try {
+            const response = await fetch('/static/charmgen/integrations.json');
+            if (!response.ok) throw new Error('Failed to load integrations.json.');
+            const integrations = await response.json();
+
+            integrations.forEach(item => {
+                const label = document.createElement('label');
+                label.className = 'flex items-start gap-3 p-4 border rounded-lg cursor-pointer';
+                label.innerHTML = `
                 <input type="checkbox" class="mt-1" data-id="${item.id}" ${state.formData.integrations.includes(item.id) ? 'checked' : ''}>
                 <div>
                     <span class="font-semibold">${item.name}</span>
                     <p class="text-sm text-gray-600">${item.description}</p>
                 </div>
             `;
-            label.querySelector('input').addEventListener('change', (e) => {
-                const id = e.target.dataset.id;
-                const newIntegrations = e.target.checked
-                    ? [...state.formData.integrations, id]
-                    : state.formData.integrations.filter(i => i !== id);
-                setState({ formData: { ...state.formData, integrations: newIntegrations } });
+                label.querySelector('input').addEventListener('change', (e) => {
+                    const id = e.target.dataset.id;
+                    const newIntegrations = e.target.checked
+                        ? [...state.formData.integrations, id]
+                        : state.formData.integrations.filter(i => i !== id);
+                    setState({ formData: { ...state.formData, integrations: newIntegrations } });
+                });
+                grid.appendChild(label);
             });
-            grid.appendChild(label);
-        });
 
+
+        } catch (err) {
+            grid.innerHTML = `<p class="text-red-500">Error loading integrations: ${err.message}</p>`;
+
+        }
         const nextBtn = document.createElement('button');
         nextBtn.className = 'mt-6 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700';
         nextBtn.textContent = 'Next: Config Options';
         nextBtn.addEventListener('click', () => setState({ activeStep: 4 }));
 
+
         content.appendChild(grid);
         content.appendChild(nextBtn);
-        
+
         const summaryTitle = state.formData.integrations.length > 0 ? `${state.formData.integrations.length} Integration(s)` : null;
         return createAccordionStep('3. Select Integrations', 3, summaryTitle, content);
+
     }
 
-    function renderStep4() {
+    function renderCustomizeConfigOptions() {
         const content = document.createElement('div');
         content.innerHTML = `<p class="mb-4">Add custom configuration options (Key, Type, Optional, Default Value).</p>
         <p class="text-gray-500 italic">This UI is abridged. Click Next to continue.</p>`;
-        
+
         const nextBtn = document.createElement('button');
         nextBtn.className = 'mt-6 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700';
         nextBtn.textContent = 'Next: Get Files';
@@ -284,7 +291,7 @@ document.addEventListener('DOMContentLoaded', () => {
         return createAccordionStep('4. Custom Config Options', 4, summaryTitle, content);
     }
 
-    function renderStep5() {
+    function renderGenerate() {
         const content = document.createElement('div');
         content.innerHTML = `
             <h4 class="text-xl font-bold">Generation Complete!</h4>
@@ -298,7 +305,7 @@ document.addEventListener('DOMContentLoaded', () => {
             <div id="error-msg-final" class="text-red-600 mb-4"></div>
             <button id="generate-btn" class="px-6 py-3 bg-green-600 text-white font-bold rounded hover:bg-green-700">Generate & Download Bundle</button>
         `;
-        
+
         const handleGeneration = async () => {
             const btn = content.querySelector('#generate-btn');
             const errorMsg = content.querySelector('#error-msg-final');
@@ -307,34 +314,34 @@ document.addEventListener('DOMContentLoaded', () => {
             btn.textContent = 'Starting...';
             btn.disabled = true;
             errorMsg.textContent = '';
-            
+
             logPanel.classList.remove('hidden');
             logPanel.innerHTML = '<p class="text-gray-400">Starting generation process...</p>';
-        
+
             try {
                 const startResponse = await fetch('/api/start-generation/', {
                     method: 'POST',
-                    headers: { 
+                    headers: {
                         'Content-Type': 'application/json',
-                        'X-CSRFToken': csrftoken 
+                        'X-CSRFToken': csrftoken
                     },
                     body: JSON.stringify(state.formData)
                 });
-                
+
                 const startResult = await startResponse.json();
                 if (!startResponse.ok) {
                     throw new Error(startResult.error || 'Failed to start generation.');
                 }
-        
+
                 const taskId = startResult.taskId;
                 showNotification('Generation process started...');
                 btn.textContent = 'Generating...';
-        
+
                 const eventSource = new EventSource(`/api/generation-status/${taskId}/`);
-        
+
                 eventSource.onmessage = (event) => {
                     const data = JSON.parse(event.data);
-        
+
                     // --- UPDATED LOGIC ---
                     // Differentiate between high-level status and raw logs
                     if (data.type === 'log') {
@@ -352,7 +359,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     } else if (data.status) { // Legacy check
                         showNotification(data.status);
                     }
-        
+
                     if (data.downloadUrl) {
                         showNotification('Bundle ready for download!', 'success');
                         window.location.href = data.downloadUrl;
@@ -361,7 +368,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         btn.disabled = false;
                         logPanel.classList.add('hidden');
                     }
-                    
+
                     if (data.error) {
                         eventSource.close();
                         const errorLine = document.createElement('p');
@@ -372,7 +379,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         throw new Error(data.error);
                     }
                 };
-        
+
                 eventSource.onerror = (err) => {
                     console.error("EventSource failed:", err);
                     errorMsg.textContent = 'Error: Connection to server lost during generation.';
@@ -381,8 +388,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     btn.disabled = false;
                     logPanel.classList.add('hidden');
                 };
-        
-            } catch(err) {
+
+            } catch (err) {
                 errorMsg.textContent = `Error: ${err.message}`;
                 showNotification(err.message, 'error');
                 btn.textContent = 'Generate & Download Bundle';
@@ -394,7 +401,7 @@ document.addEventListener('DOMContentLoaded', () => {
         content.querySelector('#generate-btn').addEventListener('click', handleGeneration);
         return createAccordionStep('5. Generate Files', 5, null, content);
     }
-    
+
     // Initial render
     render();
 });
