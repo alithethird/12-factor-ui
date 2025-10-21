@@ -17,10 +17,11 @@ from logic.bundler import BundleArtifacts
 # Import the new UI components
 from ui.AccordionStep import AccordionStep
 from ui.SelectFramework import SelectFramework
+from ui.UploadCode import UploadCode
+from ui.SelectIntegrations import SelectIntegrations
 
-# --- App State Management ---
-JOB_STORE = {}
-TEMP_STORAGE_PATH = Path("temp_jobs")
+# Import from the new state management file
+from state import TEMP_STORAGE_PATH, JOB_STORE
 
 
 def main(page: ft.Page):
@@ -53,96 +54,10 @@ def main(page: ft.Page):
     def update_data(new_data):
         app_state["form_data"].update(new_data)
         if "source" in new_data and new_data["source"]:
-             app_state["form_data"]["sourceProjectName"] = new_data["source"].get("projectName")
+            app_state["form_data"]["sourceProjectName"] = new_data["source"].get("projectName")
         page.update()
 
     # --- Step Content Definitions (for steps not yet refactored) ---
-
-    def build_step2():
-        repo_url_field = ft.TextField(label="GitHub Repository URL", hint_text="https://github.com/user/repo")
-        file_picker = ft.FilePicker(on_result=lambda e: on_file_picked(e))
-        page.overlay.append(file_picker) # Add file picker to overlay
-        file_picker_button = ft.ElevatedButton("Select Archive...", on_click=lambda _: file_picker.pick_files(allow_multiple=False, allowed_extensions=["zip", "tar", "gz"]))
-        selected_file_text = ft.Text("No file selected.")
-
-        github_view = ft.Column([repo_url_field], visible=True)
-        upload_view = ft.Column([file_picker_button, selected_file_text], visible=False)
-
-        def on_file_picked(e: ft.FilePickerResultEvent):
-            if e.files:
-                selected_file_text.value = f"Selected: {e.files[0].name}"
-                selected_file_text.data = e.files[0]
-            else:
-                selected_file_text.value = "No file selected."
-            page.update()
-
-        def switch_tabs(e):
-            is_github = e.control.selected_index == 0
-            github_view.visible = is_github
-            upload_view.visible = not is_github
-            page.update()
-
-        tabs = ft.Tabs(
-            selected_index=0,
-            on_change=switch_tabs,
-            tabs=[ft.Tab(text="From GitHub"), ft.Tab(text="Upload Archive")],
-        )
-        
-        progress_ring = ft.ProgressRing(visible=False)
-        error_text = ft.Text(color=ft.Colors.RED, visible=False)
-
-        def on_validate(e):
-            progress_ring.visible = True
-            error_text.visible = False
-            page.update()
-
-            job_id = str(uuid.uuid4())
-            job_dir = TEMP_STORAGE_PATH / job_id
-            job_dir.mkdir(parents=True, exist_ok=True)
-            
-            project_path = ""
-            project_name = ""
-            source_info = {}
-
-            try:
-                time.sleep(1) # Simulate work
-                if tabs.selected_index == 0:
-                    downloader = GithubDownloader(repo_url_field.value)
-                    result = downloader.download(str(job_dir))
-                    project_path = result['path']
-                    project_name = result['project_name']
-                    source_info = {"type": "github", "projectName": project_name}
-                else:
-                    file_data = selected_file_text.data
-                    if not file_data:
-                        raise ValueError("No file selected for upload.")
-                    extractor = ArchiveExtractor(file_data.path, file_data.name)
-                    result = extractor.extract(str(job_dir))
-                    project_path = result['root_path']
-                    project_name = result['project_name']
-                    source_info = {"type": "upload", "projectName": project_name}
-                
-                processor = ApplicationProcessor(project_path, app_state["form_data"]["framework"])
-                processor.check_project()
-
-                JOB_STORE[job_id] = project_path
-                app_state["update_form_data"]({"jobId": job_id, "source": source_info})
-                accordion2.update_summary(f"Source: {project_name}")
-                app_state["set_active_step"](3)
-
-            except Exception as ex:
-                error_text.value = f"Error: {ex}"
-                error_text.visible = True
-                shutil.rmtree(job_dir, ignore_errors=True)
-            finally:
-                progress_ring.visible = False
-                page.update()
-
-        return ft.Column([
-            tabs, github_view, upload_view,
-            ft.ElevatedButton("Validate & Continue", on_click=on_validate, icon=ft.Icons.CHECK),
-            progress_ring, error_text
-        ], spacing=15)
 
     def build_step5():
         log_view = ft.ListView(expand=True, spacing=5, auto_scroll=True)
@@ -177,7 +92,7 @@ def main(page: ft.Page):
             try:
                 data = app_state["get_form_data"]()
                 project_path = JOB_STORE.get(data["jobId"])
-                
+
                 if not project_path: raise ValueError("Job not found or expired.")
 
                 rock_gen = RockcraftGenerator(project_path)
@@ -187,18 +102,18 @@ def main(page: ft.Page):
                     data["integrations"], data["configOptions"], data["sourceProjectName"]
                 )
                 charm_file_path, charm_cleanup = charm_gen.generate(status_callback=update_status)
-                
+
                 update_status("Bundling artifacts...")
                 zip_path, zip_cleanup = BundleArtifacts(rock_file_path, charm_file_path)
 
                 save_picker.data = zip_path
                 save_picker.save_file(dialog_title="Save Your Bundle", file_name="rock-and-charm-bundle.zip")
-                
+
                 if data["jobId"] in JOB_STORE:
                     shutil.rmtree(TEMP_STORAGE_PATH / data["jobId"], ignore_errors=True)
                     del JOB_STORE[data["jobId"]]
                 charm_cleanup()
-                
+
             except Exception as e:
                 update_status(f"ERROR: {e}", is_log=True)
             finally:
@@ -211,21 +126,21 @@ def main(page: ft.Page):
             log_view.controls.append(ft.Text("Starting generation...", weight=ft.FontWeight.BOLD))
             generate_button.disabled = True
             page.update()
-            
+
             thread = threading.Thread(target=run_generation_in_thread, daemon=True)
             thread.start()
 
         generate_button = ft.ElevatedButton("Generate & Save Bundle", on_click=on_generate, icon=ft.Icons.SAVE)
-        
+
         return ft.Column([
             ft.Text("All steps complete. You can now generate your files.", size=16),
             generate_button, log_container,
         ], spacing=15)
-    
+
     # --- Main Layout ---
     accordion1 = SelectFramework(app_state)
-    accordion2 = AccordionStep("2. Provide Source Code", 2, app_state, build_step2())
-    accordion3 = AccordionStep("3. Select Integrations", 3, app_state, ft.Text("Integrations UI would go here."))
+    accordion2 = UploadCode(app_state)
+    accordion3 = SelectIntegrations(app_state)
     accordion4 = AccordionStep("4. Custom Config Options", 4, app_state, ft.Text("Config Options UI would go here."))
     accordion5 = AccordionStep("5. Generate Files", 5, app_state, build_step5())
 
@@ -239,6 +154,7 @@ def main(page: ft.Page):
         )
     )
 
+
 if __name__ == "__main__":
     if not TEMP_STORAGE_PATH.exists():
         TEMP_STORAGE_PATH.mkdir()
@@ -246,5 +162,5 @@ if __name__ == "__main__":
     ft.app(target=main, assets_dir="static")
 
     if TEMP_STORAGE_PATH.exists():
-        shutil.rmtree(TEMP_STORAGE_PATH)
+        shutil.rmtree(TEMP_STORAGE_PATH, ignore_errors=True)
 
