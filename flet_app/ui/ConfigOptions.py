@@ -1,8 +1,23 @@
 import flet as ft
 from .AccordionStep import AccordionStep
+import re
 
 
-# Define the structure for a single config option
+# --- NEW: Helper function for env var conversion ---
+def convert_to_env_var(key: str, framework: str) -> str:
+    """Converts a kebab-case key to the framework-specific env var."""
+    prefix = 'APP'
+    if framework == 'django':
+        prefix = 'DJANGO'
+    elif framework == 'flask':
+        prefix = 'FLASK'
+
+    # Convert to uppercase and replace hyphens with underscores
+    processed_key = key.replace('-', '_').upper()
+
+    return f"{prefix}_{processed_key}"
+
+
 class ConfigOption:
     def __init__(self, key: str, type: str, value: str, is_optional: bool):
         self.key = key
@@ -42,8 +57,39 @@ class ConfigOptions(AccordionStep):
         self.new_value_field = ft.TextField(label="Default Value", hint_text="leave empty if not optional", expand=2)
         self.error_text = ft.Text(color=ft.Colors.RED, visible=False)
 
-        # This will hold the visual list of added options
         self.options_list_view = ft.Column(spacing=5)
+
+        # --- Generate Info Box Content ---
+        framework = self.app_state["form_data"].get("framework", "other")
+        example_var = convert_to_env_var("some-config", framework)
+        prefix = example_var.split('_')[0] + '_'
+
+        info_box = ft.Container(
+            content=ft.Row([
+                ft.Icon(ft.Icons.INFO_OUTLINE, color=ft.Colors.BLUE_700),
+                ft.Column([
+                    ft.Text(
+                        spans=[
+                            ft.TextSpan("Note: Config options are converted to environment variables with the "),
+                            ft.TextSpan(f"{prefix}", ft.TextStyle(weight=ft.FontWeight.BOLD)),
+                            ft.TextSpan(" prefix."),
+                        ]
+                    ),
+                    ft.Text(
+                        spans=[
+                            ft.TextSpan("e.g., "),
+                            ft.TextSpan("some-config", ft.TextStyle(font_family="monospace")),
+                            ft.TextSpan(" becomes "),
+                            ft.TextSpan(example_var, ft.TextStyle(font_family="monospace", weight=ft.FontWeight.BOLD)),
+                        ]
+                    )
+                ])
+            ]),
+            bgcolor=ft.Colors.BLUE_50,
+            border=ft.border.all(1, ft.Colors.BLUE_200),
+            border_radius=8,
+            padding=10,
+        )
 
         # --- Event Handlers ---
         def on_add_option(e):
@@ -52,7 +98,6 @@ class ConfigOptions(AccordionStep):
             value = self.new_value_field.value.strip()
             is_optional = self.new_optional_checkbox.value
 
-            # Validation
             if not key:
                 self.error_text.value = "Error: Key cannot be empty."
                 self.error_text.visible = True
@@ -71,7 +116,6 @@ class ConfigOptions(AccordionStep):
                 self.page.update()
                 return
 
-            # Add to state and update UI
             new_option = ConfigOption(
                 key=key,
                 type=self.new_type_dropdown.value,
@@ -82,7 +126,6 @@ class ConfigOptions(AccordionStep):
             current_options.append(new_option)
             self.app_state["update_form_data"]({"configOptions": current_options})
 
-            # Reset fields
             self.new_key_field.value = ""
             self.new_value_field.value = ""
             self.new_optional_checkbox.value = False
@@ -114,8 +157,9 @@ class ConfigOptions(AccordionStep):
         content_control = ft.Column(
             [
                 ft.Text("Enter any custom config options for your charm:", size=16),
+                info_box,  # Add the info box here
                 ft.Divider(),
-                self.options_list_view,  # Placeholder for the list
+                self.options_list_view,
                 ft.Divider(),
                 add_row,
                 self.error_text,
@@ -124,7 +168,7 @@ class ConfigOptions(AccordionStep):
             spacing=15,
         )
 
-        self.update_options_list()  # Initial population of the list
+        self.update_options_list()
 
         super().__init__(
             title="4. Custom Config Options",
@@ -134,7 +178,6 @@ class ConfigOptions(AccordionStep):
         )
 
     def update_options_list(self):
-        """Re-renders the list of added config options."""
         self.options_list_view.controls.clear()
 
         current_options = self.app_state["form_data"]["configOptions"]
@@ -143,10 +186,9 @@ class ConfigOptions(AccordionStep):
                 ft.Text("No config options added yet.", italic=True, color=ft.Colors.BLACK54))
             return
 
-        # Header row
         self.options_list_view.controls.append(
             ft.Row([
-                ft.Text("Key", weight=ft.FontWeight.BOLD, expand=2),
+                ft.Text("Key / Env Var Preview", weight=ft.FontWeight.BOLD, expand=2),
                 ft.Text("Type", weight=ft.FontWeight.BOLD, expand=1),
                 ft.Text("Optional", weight=ft.FontWeight.BOLD, expand=1),
                 ft.Text("Default Value", weight=ft.FontWeight.BOLD, expand=2),
@@ -154,6 +196,7 @@ class ConfigOptions(AccordionStep):
             ])
         )
 
+        framework = self.app_state["form_data"].get("framework", "other")
         for option in current_options:
             def on_remove(e):
                 opt_to_remove = e.control.data
@@ -164,9 +207,20 @@ class ConfigOptions(AccordionStep):
                 self.update_summary_title()
                 self.page.update()
 
+            # --- NEW: Key cell with preview ---
+            key_cell = ft.Column([
+                ft.Text(option.key, weight=ft.FontWeight.NORMAL),
+                ft.Text(
+                    convert_to_env_var(option.key, framework),
+                    italic=True,
+                    size=11,
+                    color=ft.Colors.BLACK54
+                )
+            ], spacing=2, expand=2)
+
             row = ft.Row(
                 controls=[
-                    ft.Text(option.key, expand=2),
+                    key_cell,
                     ft.Text(option.type, expand=1),
                     ft.Text("Yes" if option.is_optional else "No", expand=1),
                     ft.Text(option.value, expand=2),
@@ -180,6 +234,7 @@ class ConfigOptions(AccordionStep):
                     ),
                 ],
                 alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                vertical_alignment=ft.CrossAxisAlignment.CENTER
             )
             self.options_list_view.controls.append(row)
 
@@ -189,3 +244,4 @@ class ConfigOptions(AccordionStep):
             self.update_summary(f"{count} Config Option(s) Added")
         else:
             self.update_summary(None)
+
