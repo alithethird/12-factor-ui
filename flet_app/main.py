@@ -19,6 +19,7 @@ from ui.AccordionStep import AccordionStep
 from ui.SelectFramework import SelectFramework
 from ui.UploadCode import UploadCode
 from ui.SelectIntegrations import SelectIntegrations
+from ui.ConfigOptions import ConfigOptions
 
 # Import from the new state management file
 from state import TEMP_STORAGE_PATH, JOB_STORE
@@ -98,8 +99,12 @@ def main(page: ft.Page):
                 rock_gen = RockcraftGenerator(project_path)
                 rock_file_path = rock_gen.generate(status_callback=update_status)
 
+                # Convert ConfigOption objects to dictionaries for CharmcraftGenerator
+                config_options_dicts = [opt.to_dict() for opt in data["configOptions"]]
+                integration_ids = [integ['id'] for integ in data["integrations"]]
+
                 charm_gen = CharmcraftGenerator(
-                    data["integrations"], data["configOptions"], data["sourceProjectName"]
+                    integration_ids, config_options_dicts, data["sourceProjectName"]
                 )
                 charm_file_path, charm_cleanup = charm_gen.generate(status_callback=update_status)
 
@@ -141,7 +146,7 @@ def main(page: ft.Page):
     accordion1 = SelectFramework(app_state)
     accordion2 = UploadCode(app_state)
     accordion3 = SelectIntegrations(app_state)
-    accordion4 = AccordionStep("4. Custom Config Options", 4, app_state, ft.Text("Config Options UI would go here."))
+    accordion4 = ConfigOptions(app_state)
     accordion5 = AccordionStep("5. Generate Files", 5, app_state, build_step5())
 
     page.add(
@@ -156,11 +161,12 @@ def main(page: ft.Page):
 
 
 if __name__ == "__main__":
+    # Ensure the main temp directory for our app exists on startup
     if not TEMP_STORAGE_PATH.exists():
-        TEMP_STORAGE_PATH.mkdir()
+        TEMP_STORAGE_PATH.mkdir(parents=True, exist_ok=True)
 
     ft.app(target=main, assets_dir="static")
 
-    if TEMP_STORAGE_PATH.exists():
-        shutil.rmtree(TEMP_STORAGE_PATH, ignore_errors=True)
+    # The individual job folders are cleaned up as they are used,
+    # so we no longer need a global cleanup here.
 
