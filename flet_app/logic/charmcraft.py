@@ -1,9 +1,10 @@
-import subprocess
-import os
 import glob
-import tempfile
-import yaml
+import os
 import shutil
+import subprocess
+import tempfile
+
+import yaml
 
 INTEGRATION_MAP = {
     "postgresql": {"db": {"interface": "postgresql_client"}},
@@ -53,8 +54,10 @@ class CharmcraftGenerator:
         """Initializes, updates, and packs the Charm."""
         if status_callback:
             status_callback("Initializing Charmcraft...")
-        self._run_command(['charmcraft', 'init', '--name', self.project_name], cwd=self.temp_dir, status_callback=status_callback)
-        charm_project_path = os.path.join(self.temp_dir, self.project_name)
+        self._run_command(['mkdir', 'charm'], cwd=self.temp_dir, status_callback=status_callback) 
+        self._run_command(['charmcraft', 'init'], cwd=f"{self.temp_dir}/charm", status_callback=status_callback)
+        # , '--name', self.project_name
+        charm_project_path = os.path.join(self.temp_dir, "charm")
 
         # Update charmcraft.yaml
         yaml_path = os.path.join(charm_project_path, 'charmcraft.yaml')
@@ -65,7 +68,8 @@ class CharmcraftGenerator:
         for i_id in self.integrations:
             if i_id in INTEGRATION_MAP:
                 relations.update(INTEGRATION_MAP[i_id])
-        charm_data['requires'] = relations
+        # TODO: Uncomment and use integrations
+        # charm_data['requires'] = relations
 
         options = {}
         for opt in self.config_options:
@@ -73,7 +77,8 @@ class CharmcraftGenerator:
             if opt.get('isOptional'):
                 config['default'] = self._get_typed_value(opt['value'], opt['type'])
             options[opt['key']] = config
-        charm_data['options'] = options
+        # TODO: Uncomment and use options
+        # charm_data['options'] = options
         
         with open(yaml_path, 'w') as f:
             yaml.dump(charm_data, f)
@@ -89,4 +94,5 @@ class CharmcraftGenerator:
         return charm_files[0], self.cleanup
 
     def cleanup(self):
+        shutil.rmtree(self.temp_dir, ignore_errors=True)
         shutil.rmtree(self.temp_dir, ignore_errors=True)

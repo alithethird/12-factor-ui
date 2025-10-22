@@ -35,6 +35,7 @@ def main(page: ft.Page):
         "set_active_step": lambda step: set_step(step),
         "update_form_data": lambda data: update_data(data),
         "get_form_data": lambda: app_state["form_data"],
+        "get_framework": lambda: app_state["form_data"].get("framework"),
         "page": page,
     }
 
@@ -87,7 +88,7 @@ def main(page: ft.Page):
 
                 if not project_path: raise ValueError("Job not found or expired.")
 
-                rock_gen = RockcraftGenerator(project_path)
+                rock_gen = RockcraftGenerator(project_path, app_state["get_framework"]())
                 rock_file_path = rock_gen.generate(status_callback=update_status)
 
                 # Convert ConfigOption objects to dictionaries for CharmcraftGenerator

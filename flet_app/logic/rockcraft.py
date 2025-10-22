@@ -1,11 +1,13 @@
-import subprocess
-import os
 import glob
+import os
 import shutil
+import subprocess
+
 
 class RockcraftGenerator:
-    def __init__(self, project_path):
+    def __init__(self, project_path, framework):
         self.project_path = project_path
+        self.framework = framework
 
     def _run_command(self, command, status_callback=None):
         """Runs a command and streams its output to the status_callback."""
@@ -19,7 +21,8 @@ class RockcraftGenerator:
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT, # Combine stdout and stderr
             text=True,
-            bufsize=1 # Line-buffered
+            bufsize=1, # Line-buffered
+            env={"ROCKCRAFT_ENABLE_EXPERIMENTAL_EXTENSIONS":"true"},
         )
 
         # Read output line by line in real-time
@@ -38,7 +41,7 @@ class RockcraftGenerator:
         """Initializes and packs the Rock, with an optional callback for status updates."""
         if status_callback:
             status_callback("Initializing Rockcraft...")
-        self._run_command(['rockcraft', 'init', '--profile=flask-framework', '--force'], status_callback)
+        self._run_command(['rockcraft', 'init', f'--profile={self.framework}-framework'], status_callback)
         
         if status_callback:
             status_callback("Rockcraft initialized. Packing Rock...")
