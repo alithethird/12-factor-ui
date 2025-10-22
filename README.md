@@ -1,36 +1,26 @@
-Django app that helps you charm your app
+Flet app that helps you charm your app.
 
 
 
-tested: flask with .tar file
-
-need to test:
-- other frameworks
-- github
-
-Need to update integration selection
-Need to wire selected integrations to the charmcraft.yaml file
-Need to wire added config options to the charmcraft.yaml file
-Need to clean the repo and set it up for Django app only.
 
 
+to run:
 
-launch.json:
+`cd flet`
+`python3 -m venv venv`
+`source venv/bin/activate`
+`pip install -r requirements.txt`
+`flet run`
 
-{
-  // Use IntelliSense to learn about possible attributes.
-  // Hover to view descriptions of existing attributes.
-  // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
-  "version": "0.2.0",
-  "configurations": [
-    {
-      "name": "Python Debugger: Django",
-      "type": "debugpy",
-      "request": "launch",
-      "program": "${workspaceFolder}/django_app/manage.py",
-      "args": ["runserver", "8001"],
-      "django": true,
-      "justMyCode": true
-    }
-  ]
-}
+to pack for Linux:
+
+`flet pack main.py  --add-data "assets:assets" --name charm-gen`
+
+
+sometimes packing fails with something similar to `libmpv.so.1 not found`
+
+to fix it:
+
+`sudo apt install libmpv-dev libmpv2`
+
+`sudo ln -s /usr/lib/x86_64-linux-gnu/libmpv.so /usr/lib/libmpv.so.1`
