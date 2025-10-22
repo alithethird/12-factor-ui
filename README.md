@@ -1,11 +1,26 @@
-# charmed-nodejs-boilerplate
+Flet app that helps you charm your app.
 
-Web team charmed NodeJS boilerplate repository.
 
-This repository provides a robust foundation for building and deploying Node.js applications as Juju charms. It includes a React frontend served by an Express backend.
 
-## Documentation
 
-For comprehensive information on setting up your development environment, understanding the project architecture, quick start guides, and more, please refer to our official documentation:
 
-* [**View Documentation**](./docs/index.md)
+to run:
+
+`cd flet`
+`python3 -m venv venv`
+`source venv/bin/activate`
+`pip install -r requirements.txt`
+`flet run`
+
+to pack for Linux:
+
+`flet pack main.py  --add-data "assets:assets" --name charm-gen`
+
+
+sometimes packing fails with something similar to `libmpv.so.1 not found`
+
+to fix it:
+
+`sudo apt install libmpv-dev libmpv2`
+
+`sudo ln -s /usr/lib/x86_64-linux-gnu/libmpv.so /usr/lib/libmpv.so.1`
