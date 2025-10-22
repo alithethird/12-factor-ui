@@ -1,28 +1,19 @@
-import flet as ft
-import os
 import shutil
 import threading
-import time
-import uuid
-from pathlib import Path
 
-# Import your existing logic modules
-from logic.downloader import GithubDownloader
-from logic.extractor import ArchiveExtractor
-from logic.processor import ApplicationProcessor
-from logic.rockcraft import RockcraftGenerator
-from logic.charmcraft import CharmcraftGenerator
+import flet as ft
 from logic.bundler import BundleArtifacts
-
+from logic.charmcraft import CharmcraftGenerator
+# Import your existing logic modules
+from logic.rockcraft import RockcraftGenerator
+# Import from the new state management file
+from state import JOB_STORE, TEMP_STORAGE_PATH
 # Import the new UI components
 from ui.AccordionStep import AccordionStep
-from ui.SelectFramework import SelectFramework
-from ui.UploadCode import UploadCode
-from ui.SelectIntegrations import SelectIntegrations
 from ui.ConfigOptions import ConfigOptions
-
-# Import from the new state management file
-from state import TEMP_STORAGE_PATH, JOB_STORE
+from ui.SelectFramework import SelectFramework
+from ui.SelectIntegrations import SelectIntegrations
+from ui.UploadCode import UploadCode
 
 
 def main(page: ft.Page):
@@ -165,7 +156,7 @@ if __name__ == "__main__":
     if not TEMP_STORAGE_PATH.exists():
         TEMP_STORAGE_PATH.mkdir(parents=True, exist_ok=True)
 
-    ft.app(target=main, assets_dir="static")
+    ft.app(target=main, assets_dir="assets")
 
     # The individual job folders are cleaned up as they are used,
     # so we no longer need a global cleanup here.

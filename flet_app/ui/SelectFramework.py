@@ -1,16 +1,18 @@
 import flet as ft
+
 from .AccordionStep import AccordionStep
+
 
 class SelectFramework(AccordionStep):
     def __init__(self, app_state):
         # 1. Define the content for this specific step first
         frameworks = [
-            {'id': 'flask', 'name': 'Flask', 'logo_path': 'static/logos/flask.svg'},
-            {'id': 'django', 'name': 'Django', 'logo_path': 'static/logos/django.svg'},
-            {'id': 'fastapi', 'name': 'FastAPI', 'logo_path': 'static/logos/fastapi.svg'},
-            {'id': 'go', 'name': 'Go', 'logo_path': 'static/logos/go.svg'},
-            {'id': 'expressjs', 'name': 'Express.js', 'logo_path': 'static/logos/expressjs.svg'},
-            {'id': 'springboot', 'name': 'Spring Boot', 'logo_path': 'static/logos/spring-boot.svg'},
+            {'id': 'flask', 'name': 'Flask', 'logo_path': 'flask.svg'},
+            {'id': 'django', 'name': 'Django', 'logo_path': 'django.svg'},
+            {'id': 'fastapi', 'name': 'FastAPI', 'logo_path': 'fastapi.svg'},
+            {'id': 'go', 'name': 'Go', 'logo_path': 'go.svg'},
+            {'id': 'expressjs', 'name': 'Express.js', 'logo_path': 'expressjs.svg'},
+            {'id': 'springboot', 'name': 'Spring Boot', 'logo_path': 'spring-boot.svg'},
         ]
 
         def on_framework_select(e):
