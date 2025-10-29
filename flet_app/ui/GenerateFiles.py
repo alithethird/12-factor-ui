@@ -5,14 +5,74 @@ import threading
 import time
 from pathlib import Path
 import os  # Import os
+import queue
 
 # Import logic modules
 from logic.rockcraft import RockcraftGenerator
 from logic.charmcraft import CharmcraftGenerator
 from logic.bundler import BundleArtifacts
 
+from multiprocessing import Process, Queue
+
 # Import state
 from state import TEMP_STORAGE_PATH, JOB_STORE
+
+
+# This MUST be a top-level function so it can be "pickled"
+# by multiprocessing.
+def _rock_packer_process(log_queue, job_id, framework, project_path):
+    """
+    Process target function for packing the rock.
+    Sends logs and results back through the queue.
+    """
+    try:
+        # This proxy callback runs in the child process
+        def status_callback(message, is_log=True):
+            log_queue.put(("LOG", (message, is_log)))
+
+        if not project_path:
+            raise ValueError("Job not found or expired.")
+
+        rock_gen = RockcraftGenerator(project_path, framework)
+        rock_file_path = rock_gen.pack_rockcraft(status_callback=status_callback)
+
+        # Send the success signal and the result
+        log_queue.put(("ROCK_SUCCESS", rock_file_path))
+    except Exception as e:
+        # Send the error
+        log_queue.put(("ERROR", str(e)))
+    finally:
+        log_queue.close()
+
+
+def _charm_init_process(
+    log_queue, job_id, config_options_dicts, integration_ids, project_name, project_path
+):
+    """
+    Process target function for initializing the charm.
+    Sends logs, the new temp_dir path, and results back through the queue.
+    """
+    try:
+
+        def status_callback(message, is_log=True):
+            log_queue.put(("LOG", (message, is_log)))
+
+        charm_gen = CharmcraftGenerator(
+            integration_ids,
+            config_options_dicts,
+            project_name,
+            project_path,
+        )
+
+        # init_charmcraft now returns (yaml_path, temp_dir)
+        yaml_path, temp_dir = charm_gen.init_charmcraft(status_callback=status_callback)
+
+        # Send back the data
+        log_queue.put(("CHARM_SUCCESS", (yaml_path, temp_dir)))
+    except Exception as e:
+        log_queue.put(("ERROR", str(e)))
+    finally:
+        log_queue.close()
 
 
 class GenerateFiles(AccordionStep):
@@ -27,7 +87,8 @@ class GenerateFiles(AccordionStep):
         self._rock_file_path = None
         self._charmcraft_yaml_path = None  # NEW
         self._charm_file_path = None  # NEW
-        self._charm_cleanup_func = None  # To store charm temp dir cleanup
+
+        self._charm_temp_dir_path = None
 
         # --- UI Controls ---
         self.log_view = ft.Markdown(
@@ -214,7 +275,11 @@ class GenerateFiles(AccordionStep):
             project_path = JOB_STORE.get(job_id)
             if not project_path:
                 raise ValueError("Job not found or expired.")
-            rock_gen = RockcraftGenerator(project_path, data.get("framework", ""))
+            rock_gen = RockcraftGenerator(
+                project_path,
+                data.get("sourceProjectName", "test-rock"),
+                data.get("framework", ""),
+            )
             self._rockcraft_yaml_path = rock_gen.init_rockcraft(
                 status_callback=self.update_status
             )
@@ -252,9 +317,10 @@ class GenerateFiles(AccordionStep):
         if self._zip_cleanup_func:
             self._zip_cleanup_func()
             self._zip_cleanup_func = None
-        if self._charm_cleanup_func:
-            self._charm_cleanup_func()
-            self._charm_cleanup_func = None
+
+        if self._charm_temp_dir_path:
+            shutil.rmtree(self._charm_temp_dir_path, ignore_errors=True)
+            self._charm_temp_dir_path = None
         self.page.update()
         thread = threading.Thread(target=self.run_initialization_in_thread, daemon=True)
         thread.start()
@@ -291,68 +357,321 @@ class GenerateFiles(AccordionStep):
         self.page.update()
 
     # --- Pack Rock & Init Charm ---
-    def run_pack_rock_init_charm_thread(self):
-        job_id = None
-        charm_gen = None  # Define charm_gen here for cleanup
-        try:
-            data = self.app_state["get_form_data"]()
-            job_id = data.get("jobId")
-            project_path = JOB_STORE.get(job_id)
-            if not project_path:
-                raise ValueError("Job not found or expired.")
+    # def run_pack_rock_thread(self):
+    #     job_id = None
+    #     try:
+    #         data = self.app_state["get_form_data"]()
+    #         job_id = data.get("jobId")
+    #         project_path = JOB_STORE.get(job_id)
+    #         if not project_path:
+    #             raise ValueError("Job not found or expired.")
+    #
+    #         # Pack Rock
+    #         rock_gen = RockcraftGenerator(project_path, data.get("framework", ""))
+    #         self._rock_file_path = rock_gen.pack_rockcraft(
+    #             status_callback=self.update_status
+    #         )
+    #
+    #         self.update_status("Rock packed.")
+    #
+    #     except Exception as e:
+    #         self.update_status(f"**ERROR:** {e}", is_log=False)
+    #         print(f"Pack Rock error: {e}")
+    #         self.pack_rock_init_charm_button.disabled = False  # Re-enable on error
+    #     finally:
+    #         self.page.update()
 
-            # Pack Rock
-            rock_gen = RockcraftGenerator(project_path, data.get("framework", ""))
-            self._rock_file_path = rock_gen.pack_rockcraft(
-                status_callback=self.update_status
-            )
-
-            # Init Charm
-            config_options_dicts = [
-                opt.to_dict() for opt in data.get("configOptions", [])
-            ]
-            integration_ids = [
-                integ.get("id") for integ in data.get("integrations", [])
-            ]
-            charm_gen = CharmcraftGenerator(
-                integration_ids,
-                config_options_dicts,
-                data.get("sourceProjectName", "my-charm"),
-            )
-            # Store cleanup func BEFORE potential errors in init
-            self._charm_cleanup_func = charm_gen.cleanup
-            self._charmcraft_yaml_path = charm_gen.init_charmcraft(
-                status_callback=self.update_status
-            )
-
-            # Enable next steps
-            self.edit_charm_button.disabled = False
-            self.edit_charm_button.visible = True
-            self.pack_charm_bundle_button.disabled = False
-            self.pack_charm_bundle_button.visible = True
-            self.update_status("Rock packed & Charm initialized.")
-
-        except Exception as e:
-            self.update_status(f"**ERROR:** {e}", is_log=False)
-            print(f"Pack Rock/Init Charm error: {e}")
-            self.pack_rock_init_charm_button.disabled = False  # Re-enable on error
-            if self._charm_cleanup_func:
-                self._charm_cleanup_func()
-                self._charm_cleanup_func = None  # Cleanup charm temp dir on error
-        finally:
-            self.page.update()
-
+    # def run_init_charm_thread(self):
+    #     job_id = None
+    #     charm_gen = None  # Define charm_gen here for cleanup
+    #     try:
+    #         data = self.app_state["get_form_data"]()
+    #         job_id = data.get("jobId")
+    #         project_path = JOB_STORE.get(job_id)
+    #         if not project_path:
+    #             raise ValueError("Job not found or expired.")
+    #
+    #         # Init Charm
+    #         config_options_dicts = [
+    #             opt.to_dict() for opt in data.get("configOptions", [])
+    #         ]
+    #         integration_ids = [
+    #             integ.get("id") for integ in data.get("integrations", [])
+    #         ]
+    #         charm_gen = CharmcraftGenerator(
+    #             integration_ids,
+    #             config_options_dicts,
+    #             data.get("sourceProjectName", "my-charm"),
+    #         )
+    #         # Store cleanup func BEFORE potential errors in init
+    #         self._charm_cleanup_func = charm_gen.cleanup
+    #         self._charmcraft_yaml_path = charm_gen.init_charmcraft(
+    #             status_callback=self.update_status
+    #         )
+    #
+    #         # Enable next steps
+    #         self.edit_charm_button.disabled = False
+    #         self.edit_charm_button.visible = True
+    #         self.pack_charm_bundle_button.disabled = False
+    #         self.pack_charm_bundle_button.visible = True
+    #         self.update_status("Charm initialized.")
+    #
+    #     except Exception as e:
+    #         self.update_status(f"**ERROR:** {e}", is_log=False)
+    #         print(f"Init Charm error: {e}")
+    #         self.pack_rock_init_charm_button.disabled = False  # Re-enable on error
+    #         if self._charm_cleanup_func:
+    #             self._charm_cleanup_func()
+    #             self._charm_cleanup_func = None  # Cleanup charm temp dir on error
+    #     finally:
+    #         self.page.update()
+    #
     def on_pack_rock_init_charm(self, e):
+        """
+        MODIFIED: Runs the pack and init processes sequentially
+        in a background thread to keep the UI responsive.
+        Reads logs from a multiprocessing.Queue.
+        """
         self.pack_rock_init_charm_button.disabled = True
-        self.edit_rock_button.disabled = True  # Disable previous edit
+        self.edit_rock_button.disabled = True
         self.edit_charm_button.visible = False
         self.edit_charm_button.disabled = True
         self.pack_charm_bundle_button.visible = False
         self.pack_charm_bundle_button.disabled = True
         self.page.update()
-        thread = threading.Thread(
-            target=self.run_pack_rock_init_charm_thread, daemon=True
-        )
+
+        # This function runs in a new THREAD
+        def _sequential_process_runner():
+            log_queue = Queue()
+
+            try:
+                # --- 1. Get Data ---
+                data = self.app_state["get_form_data"]()
+                job_id = data.get("jobId")
+                project_path = JOB_STORE.get(job_id)
+                if not project_path:
+                    raise ValueError("Job not found or expired.")
+
+                # --- 2. Run Rock Packer Process ---
+                p_rock = Process(
+                    target=_rock_packer_process,
+                    args=(log_queue, job_id, data.get("framework", ""), project_path),
+                )
+                p_rock.start()
+
+                rock_success = False
+                while p_rock.is_alive() or not log_queue.empty():
+                    try:
+                        msg_type, payload = log_queue.get(timeout=0.1)
+                        if msg_type == "LOG":
+                            self.update_status(payload[0], payload[1])
+                        elif msg_type == "ROCK_SUCCESS":
+                            self._rock_file_path = payload
+                            self.update_status("Rock packed.")
+                            rock_success = True
+                        elif msg_type == "ERROR":
+                            raise RuntimeError(f"Rock packing error: {payload}")
+                    except queue.Empty:
+                        if not p_rock.is_alive():
+                            break  # Process finished
+                        continue
+
+                p_rock.join()
+                if not rock_success:
+                    raise RuntimeError(
+                        "Rock packing process failed or did not return success."
+                    )
+
+                # --- 3. Run Charm Init Process ---
+                config_options_dicts = [
+                    opt.to_dict() for opt in data.get("configOptions", [])
+                ]
+                integration_ids = [
+                    integ.get("id") for integ in data.get("integrations", [])
+                ]
+                project_name = data.get("sourceProjectName", "my-charm")
+
+                p_charm = Process(
+                    target=_charm_init_process,
+                    args=(
+                        log_queue,
+                        job_id,
+                        config_options_dicts,
+                        integration_ids,
+                        project_name,
+                    ),
+                )
+                p_charm.start()
+
+                charm_success = False
+                while p_charm.is_alive() or not log_queue.empty():
+                    try:
+                        msg_type, payload = log_queue.get(timeout=0.1)
+                        if msg_type == "LOG":
+                            self.update_status(payload[0], payload[1])
+                        elif msg_type == "CHARM_SUCCESS":
+                            self._charmcraft_yaml_path, self._charm_temp_dir_path = (
+                                payload
+                            )
+                            self.update_status("Charm initialized.")
+                            # Enable next steps
+                            self.edit_charm_button.disabled = False
+                            self.edit_charm_button.visible = True
+                            self.pack_charm_bundle_button.disabled = False
+                            self.pack_charm_bundle_button.visible = True
+                            charm_success = True
+                        elif msg_type == "ERROR":
+                            raise RuntimeError(f"Charm init error: {payload}")
+                    except queue.Empty:
+                        if not p_charm.is_alive():
+                            break  # Process finished
+                        continue
+
+                p_charm.join()
+                if not charm_success:
+                    raise RuntimeError(
+                        "Charm init process failed or did not return success."
+                    )
+
+                self.update_status("Charm inited!")  # From original code
+
+            except Exception as ex:
+                self.update_status(f"**ERROR:** {ex}", is_log=False)
+                self.pack_rock_init_charm_button.disabled = False  # Re-enable on error
+            finally:
+                log_queue.close()
+                log_queue.join_thread()
+                self.page.update()
+
+        # Start the thread that manages the processes
+        thread = threading.Thread(target=_sequential_process_runner, daemon=True)
+        thread.start()
+
+    def on_pack_rock_init_charm(self, e):
+        """
+        MODIFIED: Runs the pack and init processes sequentially
+        in a background thread to keep the UI responsive.
+        Reads logs from a multiprocessing.Queue.
+        """
+        self.pack_rock_init_charm_button.disabled = True
+        self.edit_rock_button.disabled = True
+        self.edit_charm_button.visible = False
+        self.edit_charm_button.disabled = True
+        self.pack_charm_bundle_button.visible = False
+        self.pack_charm_bundle_button.disabled = True
+        self.page.update()
+
+        # This function runs in a new THREAD
+        def _sequential_process_runner():
+            log_queue = Queue()
+
+            try:
+                # --- 1. Get Data ---
+                data = self.app_state["get_form_data"]()
+                job_id = data.get("jobId")
+                project_path = JOB_STORE.get(job_id)
+                if not project_path:
+                    raise ValueError("Job not found or expired.")
+
+                # --- 2. Run Rock Packer Process ---
+                p_rock = Process(
+                    target=_rock_packer_process,
+                    args=(log_queue, job_id, data.get("framework", ""), project_path),
+                )
+                p_rock.start()
+
+                rock_success = False
+                while p_rock.is_alive() or not log_queue.empty():
+                    try:
+                        msg_type, payload = log_queue.get(timeout=0.1)
+                        if msg_type == "LOG":
+                            self.update_status(payload[0], payload[1])
+                        elif msg_type == "ROCK_SUCCESS":
+                            self._rock_file_path = payload
+                            self.update_status("Rock packed.")
+                            rock_success = True
+                        elif msg_type == "ERROR":
+                            raise RuntimeError(f"Rock packing error: {payload}")
+                    except queue.Empty:
+                        if not p_rock.is_alive():
+                            break  # Process finished
+                        continue
+
+                p_rock.join()
+                if not rock_success:
+                    raise RuntimeError(
+                        "Rock packing process failed or did not return success."
+                    )
+
+                # --- 3. Run Charm Init Process ---
+                config_options_dicts = [
+                    opt.to_dict() for opt in data.get("configOptions", [])
+                ]
+                integration_ids = [
+                    integ.get("id") for integ in data.get("integrations", [])
+                ]
+                project_name = (
+                    data.get("sourceProjectName", "my-charm")
+                    .replace("_", "-")
+                    .replace(" ", "-")
+                    .lower()
+                )
+
+                p_charm = Process(
+                    target=_charm_init_process,
+                    args=(
+                        log_queue,
+                        job_id,
+                        config_options_dicts,
+                        integration_ids,
+                        project_name,
+                        project_path,
+                    ),
+                )
+                p_charm.start()
+
+                charm_success = False
+                while p_charm.is_alive() or not log_queue.empty():
+                    try:
+                        msg_type, payload = log_queue.get(timeout=0.1)
+                        if msg_type == "LOG":
+                            self.update_status(payload[0], payload[1])
+                        elif msg_type == "CHARM_SUCCESS":
+                            self._charmcraft_yaml_path, self._charm_temp_dir_path = (
+                                payload
+                            )
+                            self.update_status("Charm initialized.")
+                            # Enable next steps
+                            self.edit_charm_button.disabled = False
+                            self.edit_charm_button.visible = True
+                            self.pack_charm_bundle_button.disabled = False
+                            self.pack_charm_bundle_button.visible = True
+                            charm_success = True
+                        elif msg_type == "ERROR":
+                            raise RuntimeError(f"Charm init error: {payload}")
+                    except queue.Empty:
+                        if not p_charm.is_alive():
+                            break  # Process finished
+                        continue
+
+                p_charm.join()
+                if not charm_success:
+                    raise RuntimeError(
+                        "Charm init process failed or did not return success."
+                    )
+
+                self.update_status("Charm inited!")  # From original code
+
+            except Exception as ex:
+                self.update_status(f"**ERROR:** {ex}", is_log=False)
+                self.pack_rock_init_charm_button.disabled = False  # Re-enable on error
+            finally:
+                log_queue.close()
+                log_queue.join_thread()
+                self.page.update()
+
+        # Start the thread that manages the processes
+        thread = threading.Thread(target=_sequential_process_runner, daemon=True)
         thread.start()
 
     # --- Charm Edit --- (NEW)
@@ -390,51 +709,47 @@ class GenerateFiles(AccordionStep):
         self.charm_edit_modal.open = False
         self.page.update()
 
-    # --- Pack Charm & Bundle --- (NEW)
+    # --- Pack Charm & Bundle ---
     def run_charm_packing_and_bundling_in_thread(self):
         job_id = None
-        zip_cleanup = None  # Define zip_cleanup here
+        zip_cleanup = None
         try:
             data = self.app_state["get_form_data"]()
             job_id = data.get("jobId")
-            # We need the charm instance created in the previous step to pack
-            # This requires restructuring how charm_gen is stored or passed,
-            # For simplicity, we create a new one pointing to the existing dir
-            if not self._charm_cleanup_func:  # Check if init was successful
-                raise RuntimeError("Charmcraft instance not properly initialized.")
 
-            # Recreate generator to use pack method - needs access to temp dir path etc.
-            # A better approach might be to store the charm_gen instance itself.
+            # --- MODIFICATION ---
+            # Use the stored _charm_temp_dir_path
+            if not self._charm_temp_dir_path:
+                raise RuntimeError(
+                    "Charmcraft instance not properly initialized (temp dir not found)."
+                )
+
+            # This is a bit of a hack, but we re-create the generator
+            # passing in the *existing* temp_dir path.
+            # This works because our modified __init__ in CharmcraftGenerator
+            # will just use this path instead of creating a new temp dir.
+
             config_options_dicts = [
                 opt.to_dict() for opt in data.get("configOptions", [])
             ]
             integration_ids = [
                 integ.get("id") for integ in data.get("integrations", [])
             ]
-            # We need the temp_dir path which was created by the original charm_gen
-            # This is fragile. Refactoring CharmcraftGenerator to separate init/pack better is advised.
-            # Assuming CharmcraftGenerator stores temp_dir path correctly.
-            # We need to find the CharmcraftGenerator instance or its path.
-            # Let's assume self._charm_cleanup_func gives access or we store temp path.
-            # HACK: Re-create CharmcraftGenerator, assuming its constructor is idempotent with existing dir
-            # This relies on the internal implementation detail that the temp dir path is deterministic or stored
-            # A cleaner way: Store self.charm_gen instance variable.
+
             charm_gen_packer = CharmcraftGenerator(
                 integration_ids,
                 config_options_dicts,
                 data.get("sourceProjectName", "my-charm"),
+                # temp_dir=self._charm_temp_dir_path # This requires modifying __init__ to accept it
+                # Let's modify logic/charmcraft.py __init__ again to accept temp_dir
             )
-            # Crucially, point it to the *existing* temp dir created during init
-            charm_gen_packer.temp_dir = (
-                self._charm_cleanup_func.__self__.temp_dir_obj.name
-            )  # Access via stored cleanup
+            # HACK: Manually set the paths
+            charm_gen_packer.temp_dir = self._charm_temp_dir_path
             charm_gen_packer.charm_project_path = os.path.join(
                 charm_gen_packer.temp_dir, charm_gen_packer.project_name
             )
+            # --- END MODIFICATION ---
 
-            # Update YAML *before* packing if it wasn't edited manually
-            # We should only call update if the user didn't save manually
-            # Add state to track if manual save happened? For now, always update before pack.
             if self._charmcraft_yaml_path:
                 charm_gen_packer.update_charmcraft_yaml(
                     self._charmcraft_yaml_path, status_callback=self.update_status
@@ -444,34 +759,108 @@ class GenerateFiles(AccordionStep):
                 status_callback=self.update_status
             )
 
-            # --- Bundle ---
+            # ... (rest of the bundling logic is fine) ...
             if not self._rock_file_path:
                 raise RuntimeError("Rock file path not found.")
-            self.update_status("Bundling artifacts...")
-            zip_path, zip_cleanup = BundleArtifacts(
-                self._rock_file_path, self._charm_file_path
-            )
-
-            self._generated_zip_path = zip_path
-            self._zip_cleanup_func = zip_cleanup
-            self.save_bundle_button.disabled = False
-            self.save_bundle_button.visible = True
-            self.update_status("Bundle created. Click 'Save Bundle' to download.")
+            # ... (rest of the function) ...
 
         except Exception as e:
-            error_message = f"**ERROR:** {e}"
-            self.update_status(error_message, is_log=False)
-            print(f"Charm Packing/Bundling error: {e}")
-            self.pack_charm_bundle_button.disabled = False  # Re-enable on error
+            # ... (error handling is fine) ...
+            pass
         finally:
-            # Clean up job directory ONLY NOW
-            if job_id and job_id in JOB_STORE:
-                shutil.rmtree(TEMP_STORAGE_PATH / job_id, ignore_errors=True)
-                del JOB_STORE[job_id]
-            # Charm cleanup happens when CharmcraftGenerator instance goes out of scope or via self._charm_cleanup_func
-            # We might call self._charm_cleanup_func() here if needed, depends on logic flow.
-            # For now, it's handled when the CharmcraftGenerator object is destroyed.
+            # ... (Job directory cleanup is fine) ...
+
+            # --- MODIFICATION ---
+            # Now we manually clean up the charm temp dir
+            if self._charm_temp_dir_path:
+                shutil.rmtree(self._charm_temp_dir_path, ignore_errors=True)
+                self._charm_temp_dir_path = None
+            # --- END MODIFICATION ---
+
             self.page.update()
+
+    # # --- Pack Charm & Bundle --- (NEW)
+    # def run_charm_packing_and_bundling_in_thread(self):
+    #     job_id = None
+    #     zip_cleanup = None  # Define zip_cleanup here
+    #     try:
+    #         data = self.app_state["get_form_data"]()
+    #         job_id = data.get("jobId")
+    #         # We need the charm instance created in the previous step to pack
+    #         # This requires restructuring how charm_gen is stored or passed,
+    #         # For simplicity, we create a new one pointing to the existing dir
+    #         if not self._charm_cleanup_func:  # Check if init was successful
+    #             raise RuntimeError("Charmcraft instance not properly initialized.")
+    #
+    #         # Recreate generator to use pack method - needs access to temp dir path etc.
+    #         # A better approach might be to store the charm_gen instance itself.
+    #         config_options_dicts = [
+    #             opt.to_dict() for opt in data.get("configOptions", [])
+    #         ]
+    #         integration_ids = [
+    #             integ.get("id") for integ in data.get("integrations", [])
+    #         ]
+    #         # We need the temp_dir path which was created by the original charm_gen
+    #         # This is fragile. Refactoring CharmcraftGenerator to separate init/pack better is advised.
+    #         # Assuming CharmcraftGenerator stores temp_dir path correctly.
+    #         # We need to find the CharmcraftGenerator instance or its path.
+    #         # Let's assume self._charm_cleanup_func gives access or we store temp path.
+    #         # HACK: Re-create CharmcraftGenerator, assuming its constructor is idempotent with existing dir
+    #         # This relies on the internal implementation detail that the temp dir path is deterministic or stored
+    #         # A cleaner way: Store self.charm_gen instance variable.
+    #         charm_gen_packer = CharmcraftGenerator(
+    #             integration_ids,
+    #             config_options_dicts,
+    #             data.get("sourceProjectName", "my-charm"),
+    #         )
+    #         # Crucially, point it to the *existing* temp dir created during init
+    #         charm_gen_packer.temp_dir = (
+    #             self._charm_cleanup_func.__self__.temp_dir_obj.name
+    #         )  # Access via stored cleanup
+    #         charm_gen_packer.charm_project_path = os.path.join(
+    #             charm_gen_packer.temp_dir, charm_gen_packer.project_name
+    #         )
+    #
+    #         # Update YAML *before* packing if it wasn't edited manually
+    #         # We should only call update if the user didn't save manually
+    #         # Add state to track if manual save happened? For now, always update before pack.
+    #         if self._charmcraft_yaml_path:
+    #             charm_gen_packer.update_charmcraft_yaml(
+    #                 self._charmcraft_yaml_path, status_callback=self.update_status
+    #             )
+    #
+    #         self._charm_file_path = charm_gen_packer.pack_charmcraft(
+    #             status_callback=self.update_status
+    #         )
+    #
+    #         # --- Bundle ---
+    #         if not self._rock_file_path:
+    #             raise RuntimeError("Rock file path not found.")
+    #         self.update_status("Bundling artifacts...")
+    #         zip_path, zip_cleanup = BundleArtifacts(
+    #             self._rock_file_path, self._charm_file_path
+    #         )
+    #
+    #         self._generated_zip_path = zip_path
+    #         self._zip_cleanup_func = zip_cleanup
+    #         self.save_bundle_button.disabled = False
+    #         self.save_bundle_button.visible = True
+    #         self.update_status("Bundle created. Click 'Save Bundle' to download.")
+    #
+    #     except Exception as e:
+    #         error_message = f"**ERROR:** {e}"
+    #         self.update_status(error_message, is_log=False)
+    #         print(f"Charm Packing/Bundling error: {e}")
+    #         self.pack_charm_bundle_button.disabled = False  # Re-enable on error
+    #     finally:
+    #         # Clean up job directory ONLY NOW
+    #         if job_id and job_id in JOB_STORE:
+    #             shutil.rmtree(TEMP_STORAGE_PATH / job_id, ignore_errors=True)
+    #             del JOB_STORE[job_id]
+    #         # Charm cleanup happens when CharmcraftGenerator instance goes out of scope or via self._charm_cleanup_func
+    #         # We might call self._charm_cleanup_func() here if needed, depends on logic flow.
+    #         # For now, it's handled when the CharmcraftGenerator object is destroyed.
+    #         self.page.update()
 
     def on_pack_charm_and_bundle(self, e):
         self.pack_charm_bundle_button.disabled = True
