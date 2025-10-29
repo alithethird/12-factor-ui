@@ -16,7 +16,7 @@ def main(page: ft.Page):
     page.vertical_alignment = ft.MainAxisAlignment.START
     page.theme_mode = ft.ThemeMode.LIGHT
     page.window_width = 800
-    page.window_height = 800
+    page.window_height = 1200
     page.scroll = ft.ScrollMode.ADAPTIVE
 
     # --- Application State ---

@@ -97,7 +97,12 @@ class UploadCode(AccordionStep):
                     )
                     result = downloader.download(str(job_dir))
                     project_path = result["path"]
-                    project_name = result["project_name"]
+                    project_name = (
+                        result["project_name"]
+                        .replace("_", "-")
+                        .replace(" ", "-")
+                        .lower()
+                    )
                     source_info = {"type": "github", "projectName": project_name}
                 else:
                     file_data = selected_file_text.data
@@ -106,7 +111,12 @@ class UploadCode(AccordionStep):
                     extractor = ArchiveExtractor(file_data.path, file_data.name)
                     result = extractor.extract(str(job_dir))
                     project_path = result["root_path"]
-                    project_name = result["project_name"]
+                    project_name = (
+                        result["project_name"]
+                        .replace("_", "-")
+                        .replace(" ", "-")
+                        .lower()
+                    )
                     source_info = {"type": "upload", "projectName": project_name}
 
                 processor = ApplicationProcessor(

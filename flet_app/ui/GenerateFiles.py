@@ -6,7 +6,7 @@ import time
 from pathlib import Path
 import os
 import queue  # Import the standard queue for Empty exception
-from multiprocessing import Process, Queue  # Import Process and Queue
+from multiprocessing import Process, Queue, freeze_support  # Import Process and Queue
 
 # Import logic modules
 from logic.rockcraft import RockcraftGenerator
@@ -17,38 +17,31 @@ from logic.bundler import BundleArtifacts
 from state import TEMP_STORAGE_PATH, JOB_STORE
 
 
-# --- NEW: Top-level function for Rock packing Process ---
-# This MUST be a top-level function so it can be "pickled"
-# by multiprocessing.
-def _rock_packer_process(log_queue, job_id, framework, project_path):
+# --- Top-level function for Rock packing Process ---
+def _rock_packer_process(log_queue, job_id, framework, project_path, project_name):
     """
     Process target function for packing the rock.
     Sends logs and results back through the queue.
     """
     try:
-        # This proxy callback runs in the child process
+
         def status_callback(message, is_log=True):
             log_queue.put(("LOG", (message, is_log)))
 
         if not project_path:
             raise ValueError("Job not found or expired.")
 
-        project_name = "test-rock"
-        print(f"{project_name=}")
         rock_gen = RockcraftGenerator(project_path, project_name, framework)
         rock_file_path = rock_gen.pack_rockcraft(status_callback=status_callback)
 
-        # Send the success signal and the result
         log_queue.put(("ROCK_SUCCESS", rock_file_path))
     except Exception as e:
-        # Send the error
         log_queue.put(("ERROR", str(e)))
     finally:
-        # Ensure the queue is closed from the process side
         log_queue.close()
 
 
-# --- NEW: Top-level function for Charm init Process ---
+# --- Top-level function for Charm init Process ---
 def _charm_init_process(
     log_queue, job_id, config_options_dicts, integration_ids, project_name
 ):
@@ -61,21 +54,18 @@ def _charm_init_process(
         def status_callback(message, is_log=True):
             log_queue.put(("LOG", (message, is_log)))
 
+        # Assuming CharmcraftGenerator handles its temp dir correctly now
         charm_gen = CharmcraftGenerator(
             integration_ids,
             config_options_dicts,
             project_name,
+            project_path=None,  # Let Charmcraft manage its own temp dir
         )
-
-        # init_charmcraft now returns (yaml_path, temp_dir)
         yaml_path, temp_dir = charm_gen.init_charmcraft(status_callback=status_callback)
-
-        # Send back the data
         log_queue.put(("CHARM_SUCCESS", (yaml_path, temp_dir)))
     except Exception as e:
         log_queue.put(("ERROR", str(e)))
     finally:
-        # Ensure the queue is closed from the process side
         log_queue.close()
 
 
@@ -91,7 +81,7 @@ class GenerateFiles(AccordionStep):
         self._rock_file_path = None
         self._charmcraft_yaml_path = None
         self._charm_file_path = None
-        self._charm_temp_dir_path = None  # To store charm temp dir path
+        self._charm_temp_dir_path = None
 
         # --- UI Controls ---
         self.log_view = ft.Markdown(
@@ -117,40 +107,51 @@ class GenerateFiles(AccordionStep):
         self.save_picker = ft.FilePicker(on_result=self.on_save_dialog_result)
         self.page.overlay.append(self.save_picker)
 
-        # --- Buttons (Reordered and Renamed) ---
+        # --- Buttons ---
         self.init_rock_button = ft.ElevatedButton(
-            "1. Init Rock", on_click=self.on_init_rock, icon=ft.Icons.PLAY_ARROW_ROUNDED
+            "Init Rock", on_click=self.on_init_rock, icon=ft.Icons.PLAY_ARROW_ROUNDED
         )
+        # --- MODIFICATION: Added Init Charm button early ---
+        self.init_charm_button = (
+            ft.ElevatedButton(  # Moved and made initially visible/enabled
+                "Init Charm",
+                on_click=self.on_init_charm,
+                icon=ft.Icons.PLAY_ARROW_ROUNDED,  # Changed icon
+                disabled=False,  # Initially enabled
+                visible=True,
+            )
+        )
+        # --- END MODIFICATION ---
         self.edit_rock_button = ft.ElevatedButton(
-            "2. Edit Rock (Opt.)",
+            "Edit Rock (Opt.)",
             on_click=self.on_edit_rockcraft,
             icon=ft.Icons.EDIT,
             disabled=True,
             visible=False,
         )
-        self.pack_rock_init_charm_button = ft.ElevatedButton(
-            "3. Pack Rock & Init Charm",
-            on_click=self.on_pack_rock_init_charm,
+        self.pack_rock_button = ft.ElevatedButton(
+            "Pack Rock",
+            on_click=self.on_pack_rock,
             icon=ft.Icons.ARROW_FORWARD,
             disabled=True,
             visible=False,
         )
         self.edit_charm_button = ft.ElevatedButton(
-            "4. Edit Charm (Opt.)",
+            "Edit Charm (Opt.)",
             on_click=self.on_edit_charmcraft,
             icon=ft.Icons.EDIT,
             disabled=True,
             visible=False,
         )
         self.pack_charm_bundle_button = ft.ElevatedButton(
-            "5. Pack Charm & Bundle",
+            "Pack Charm & Bundle",
             on_click=self.on_pack_charm_and_bundle,
             icon=ft.Icons.ARROW_FORWARD,
             disabled=True,
             visible=False,
         )
         self.save_bundle_button = ft.ElevatedButton(
-            "6. Save Bundle",
+            "Save Bundle",
             on_click=self.on_save_bundle,
             icon=ft.Icons.SAVE,
             disabled=True,
@@ -192,16 +193,29 @@ class GenerateFiles(AccordionStep):
         content_control = ft.Column(
             [
                 ft.Text(
-                    "All steps complete. You can now generate your files.", size=16
+                    "Initialize Rock and/or Charm, then proceed with packing/bundling.",
+                    size=16,
                 ),
                 ft.Row(
                     [
+                        # --- MODIFICATION: Updated Button Order ---
                         self.init_rock_button,
                         self.edit_rock_button,
-                        self.pack_rock_init_charm_button,
+                        self.pack_rock_button,
+                        # --- END MODIFICATION ---
+                    ],
+                    alignment=ft.MainAxisAlignment.START,
+                    spacing=10,
+                    wrap=True,
+                ),
+                ft.Row(
+                    [
+                        # --- MODIFICATION: Updated Button Order ---
+                        self.init_charm_button,  # Now second button
                         self.edit_charm_button,
                         self.pack_charm_bundle_button,
                         self.save_bundle_button,
+                        # --- END MODIFICATION ---
                     ],
                     alignment=ft.MainAxisAlignment.START,
                     spacing=10,
@@ -214,8 +228,8 @@ class GenerateFiles(AccordionStep):
 
         # Call parent constructor
         super().__init__(
-            title="5. Generate Files",
-            step_number=5,
+            title="5. Generate Files",  # Adjust step number if needed
+            step_number=5,  # Adjust step number if needed
             app_state=app_state,
             content_control=content_control,
         )
@@ -225,7 +239,7 @@ class GenerateFiles(AccordionStep):
         zip_path = self._generated_zip_path
         if not e.path:
             self.update_status("Save cancelled.")
-            self.save_bundle_button.disabled = False  # Re-enable
+            self.save_bundle_button.disabled = False
             self.page.update()
             return
         try:
@@ -233,7 +247,9 @@ class GenerateFiles(AccordionStep):
                 shutil.move(zip_path, e.path)
                 self.update_status("Bundle saved successfully!")
                 self._generated_zip_path = None
+                # Re-enable initial buttons after successful save
                 self.init_rock_button.disabled = False
+                self.init_charm_button.disabled = False
                 self.page.update()
             else:
                 self.update_status("Error: Bundle file not found for saving.")
@@ -280,44 +296,58 @@ class GenerateFiles(AccordionStep):
             self._rockcraft_yaml_path = rock_gen.init_rockcraft(
                 status_callback=self.update_status
             )
+            # Enable rock-specific next steps
             self.edit_rock_button.disabled = False
             self.edit_rock_button.visible = True
-            self.pack_rock_init_charm_button.disabled = False
-            self.pack_rock_init_charm_button.visible = True
+            self.pack_rock_button.disabled = False
+            self.pack_rock_button.visible = True
             self.update_status("Rockcraft initialized.")
+            # Re-enable charm init button
+            self.init_charm_button.disabled = False
+
         except Exception as e:
             self.update_status(f"**ERROR:** {e}", is_log=False)
             print(f"Initialization error: {e}")
+            # Re-enable both init buttons on error
             self.init_rock_button.disabled = False
+            self.init_charm_button.disabled = False
         finally:
             self.page.update()
 
     def on_init_rock(self, e):
         self.log_container.visible = True
         self.log_view.value = "**Starting Rock initialization...**\n\n"
+        # Disable both init buttons during the process
         self.init_rock_button.disabled = True
+        # self.init_charm_button.disabled = True
+        # Hide subsequent rock steps
         self.edit_rock_button.visible = False
         self.edit_rock_button.disabled = True
-        self.pack_rock_init_charm_button.visible = False
-        self.pack_rock_init_charm_button.disabled = True
-        self.edit_charm_button.visible = False
-        self.edit_charm_button.disabled = True
-        self.pack_charm_bundle_button.visible = False
-        self.pack_charm_bundle_button.disabled = True
+        self.pack_rock_button.visible = False
+        self.pack_rock_button.disabled = True
+        # Don't hide charm steps if charm init might have already happened
+        # self.init_charm_button.visible = False # Keep visible but disabled
+        # self.edit_charm_button.visible = False
+        # self.pack_charm_bundle_button.visible = False
+
+        # Hide final steps
         self.save_bundle_button.visible = False
         self.save_bundle_button.disabled = True
+
+        # Clear only rock-related state
         self._rockcraft_yaml_path = None
         self._rock_file_path = None
-        self._charmcraft_yaml_path = None
-        self._charm_file_path = None
+        # Don't clear charm state here
+        # self._charmcraft_yaml_path = None
+        # self._charm_file_path = None
+        # if self._charm_temp_dir_path: ... # Don't clear charm temp dir here
+
+        # Clear bundle state
         self._generated_zip_path = None
         if self._zip_cleanup_func:
             self._zip_cleanup_func()
             self._zip_cleanup_func = None
-        # Clean up charm temp dir from a *previous* run
-        if self._charm_temp_dir_path:
-            shutil.rmtree(self._charm_temp_dir_path, ignore_errors=True)
-            self._charm_temp_dir_path = None
+
         self.page.update()
         thread = threading.Thread(target=self.run_initialization_in_thread, daemon=True)
         thread.start()
@@ -353,37 +383,38 @@ class GenerateFiles(AccordionStep):
         self.rock_edit_modal.open = False
         self.page.update()
 
-    # --- Pack Rock & Init Charm ---
-    def on_pack_rock_init_charm(self, e):
-        """
-        Runs the pack and init processes sequentially
-        in a background thread to keep the UI responsive.
-        Reads logs from a multiprocessing.Queue.
-        """
-        self.pack_rock_init_charm_button.disabled = True
+    # --- Pack Rock ---
+    def on_pack_rock(self, e):
+        # Disable buttons that interfere or depend on this
+        self.pack_rock_button.disabled = True
         self.edit_rock_button.disabled = True
-        self.edit_charm_button.visible = False
-        self.edit_charm_button.disabled = True
-        self.pack_charm_bundle_button.visible = False
-        self.pack_charm_bundle_button.disabled = True
+        self.init_rock_button.disabled = True  # Prevent re-init during pack
+        # self.init_charm_button.disabled = True  # Prevent charm init during rock pack
+        self.pack_charm_bundle_button.disabled = (
+            True  # Cannot bundle until rock is packed
+        )
+
         self.page.update()
 
-        # This function runs in a new THREAD
-        def _sequential_process_runner():
+        def _run_rock_packer_in_thread():
             log_queue = Queue()
-
             try:
-                # --- 1. Get Data ---
                 data = self.app_state["get_form_data"]()
                 job_id = data.get("jobId")
                 project_path = JOB_STORE.get(job_id)
+                project_name = data.get("sourceProjectName", "my-rock")
                 if not project_path:
                     raise ValueError("Job not found or expired.")
 
-                # --- 2. Run Rock Packer Process ---
                 p_rock = Process(
                     target=_rock_packer_process,
-                    args=(log_queue, job_id, data.get("framework", ""), project_path),
+                    args=(
+                        log_queue,
+                        job_id,
+                        data.get("framework", ""),
+                        project_path,
+                        project_name,
+                    ),
                 )
                 p_rock.start()
 
@@ -395,29 +426,102 @@ class GenerateFiles(AccordionStep):
                             self.update_status(payload[0], payload[1])
                         elif msg_type == "ROCK_SUCCESS":
                             self._rock_file_path = payload
-                            self.update_status("Rock packed.")
+                            self.update_status("Rock packed successfully.")
+                            # Re-enable relevant buttons
+                            self.edit_rock_button.disabled = False
+                            self.init_rock_button.disabled = False  # Can re-init now
+                            self.init_charm_button.disabled = (
+                                False  # Can init charm now
+                            )
+                            # Enable bundling ONLY if charm is also initialized
+                            if self._charmcraft_yaml_path:
+                                self.pack_charm_bundle_button.disabled = False
                             rock_success = True
                         elif msg_type == "ERROR":
                             raise RuntimeError(f"Rock packing error: {payload}")
                     except queue.Empty:
                         if not p_rock.is_alive():
-                            break  # Process finished
+                            break
                         continue
 
                 p_rock.join()
-                if not rock_success and not self._rock_file_path:
+                if not rock_success:
                     raise RuntimeError(
                         "Rock packing process failed or did not return success."
                     )
 
-                # --- 3. Run Charm Init Process ---
+            except Exception as ex:
+                self.update_status(f"**ERROR:** {ex}", is_log=False)
+                # Re-enable buttons on error
+                self.pack_rock_button.disabled = False
+                self.edit_rock_button.disabled = False
+                self.init_rock_button.disabled = False
+                self.init_charm_button.disabled = False
+                # Keep bundle disabled if error occurred here
+                self.pack_charm_bundle_button.disabled = True
+            finally:
+                log_queue.close()
+                log_queue.join_thread()
+                self.page.update()
+
+        thread = threading.Thread(target=_run_rock_packer_in_thread, daemon=True)
+        thread.start()
+
+    # --- Init Charm ---
+    def on_init_charm(self, e):
+        self.log_container.visible = True
+        self.log_view.value = "**Starting Charm initialization...**\n\n"  # Add message
+        # Disable both init buttons during the process
+        self.init_charm_button.disabled = True
+        self.init_rock_button.disabled = True
+        # Hide subsequent charm steps
+        self.edit_charm_button.visible = False
+        self.edit_charm_button.disabled = True
+        self.pack_charm_bundle_button.visible = False
+        self.pack_charm_bundle_button.disabled = True
+        # Don't hide rock steps
+        # Hide final step
+        self.save_bundle_button.visible = False
+        self.save_bundle_button.disabled = True
+
+        # Clear only charm-related state
+        self._charmcraft_yaml_path = None
+        self._charm_file_path = None
+        if self._charm_temp_dir_path:  # Clean up previous charm temp dir IF IT EXISTS
+            shutil.rmtree(self._charm_temp_dir_path, ignore_errors=True)
+            self._charm_temp_dir_path = None
+        # Don't clear rock state
+
+        # Clear bundle state
+        self._generated_zip_path = None
+        if self._zip_cleanup_func:
+            self._zip_cleanup_func()
+            self._zip_cleanup_func = None
+
+        self.page.update()
+
+        def _run_charm_init_in_thread():
+            log_queue = Queue()
+            try:
+                data = self.app_state["get_form_data"]()
+                job_id = data.get("jobId")  # Still useful for context maybe
+
                 config_options_dicts = [
                     opt.to_dict() for opt in data.get("configOptions", [])
                 ]
                 integration_ids = [
                     integ.get("id") for integ in data.get("integrations", [])
                 ]
-                project_name = data.get("sourceProjectName", "my-charm")
+                # Try getting project name from source, default otherwise
+                project_name = data.get("sourceProjectName")
+                if not project_name:
+                    # Attempt to get from job store path if sourceProjectName wasn't set (e.g., direct upload with odd name)
+                    job_path = JOB_STORE.get(job_id)
+                    if job_path:
+                        project_name = Path(job_path).name
+                    else:
+                        project_name = "my-charm"  # Final fallback
+                project_name = project_name.replace("_", "-").lower().replace(" ", "-")
 
                 p_charm = Process(
                     target=_charm_init_process,
@@ -441,18 +545,22 @@ class GenerateFiles(AccordionStep):
                             self._charmcraft_yaml_path, self._charm_temp_dir_path = (
                                 payload
                             )
-                            self.update_status("Charm initialized.")
-                            # Enable next steps
+                            self.update_status("Charm initialized successfully.")
+                            # Enable next charm steps
                             self.edit_charm_button.disabled = False
                             self.edit_charm_button.visible = True
-                            self.pack_charm_bundle_button.disabled = False
+                            self.pack_charm_bundle_button.disabled = (
+                                False  # Enable pack/bundle now
+                            )
                             self.pack_charm_bundle_button.visible = True
+                            # Re-enable rock init button
+                            self.init_rock_button.disabled = False
                             charm_success = True
                         elif msg_type == "ERROR":
                             raise RuntimeError(f"Charm init error: {payload}")
                     except queue.Empty:
                         if not p_charm.is_alive():
-                            break  # Process finished
+                            break
                         continue
 
                 p_charm.join()
@@ -461,18 +569,17 @@ class GenerateFiles(AccordionStep):
                         "Charm init process failed or did not return success."
                     )
 
-                self.update_status("Charm inited!")  # From original code
-
             except Exception as ex:
                 self.update_status(f"**ERROR:** {ex}", is_log=False)
-                self.pack_rock_init_charm_button.disabled = False  # Re-enable on error
+                # Re-enable both init buttons on error
+                self.init_charm_button.disabled = False
+                self.init_rock_button.disabled = False
             finally:
                 log_queue.close()
-                log_queue.join_thread()  # Wait for queue feeder thread to exit
+                log_queue.join_thread()
                 self.page.update()
 
-        # Start the thread that manages the processes
-        thread = threading.Thread(target=_sequential_process_runner, daemon=True)
+        thread = threading.Thread(target=_run_charm_init_in_thread, daemon=True)
         thread.start()
 
     # --- Charm Edit ---
@@ -512,12 +619,21 @@ class GenerateFiles(AccordionStep):
         zip_cleanup = None
         try:
             data = self.app_state["get_form_data"]()
-            job_id = data.get("jobId")
+            job_id = data.get("jobId")  # Keep for potential cleanup logic
 
-            if not self._charm_temp_dir_path:
+            # --- Pre-checks ---
+            if (
+                not self._charm_temp_dir_path
+                or not Path(self._charm_temp_dir_path).exists()
+            ):
                 raise RuntimeError(
-                    "Charmcraft instance not properly initialized (temp dir not found)."
+                    "Charm project directory not found. Please initialize charm first."
                 )
+            if not self._rock_file_path or not Path(self._rock_file_path).exists():
+                raise RuntimeError(
+                    "Packed rock file not found. Please pack the rock first."
+                )
+            # --- End Pre-checks ---
 
             config_options_dicts = [
                 opt.to_dict() for opt in data.get("configOptions", [])
@@ -525,30 +641,30 @@ class GenerateFiles(AccordionStep):
             integration_ids = [
                 integ.get("id") for integ in data.get("integrations", [])
             ]
+            project_name = data.get("sourceProjectName", "my-charm")
+            project_name = project_name.replace("_", "-").lower().replace(" ", "-")
 
+            # Recreate generator instance using the existing temp path
             charm_gen_packer = CharmcraftGenerator(
                 integration_ids,
                 config_options_dicts,
-                data.get("sourceProjectName", "my-charm"),
-            )
-            # Manually set the paths to the existing temp directory
-            charm_gen_packer.temp_dir = self._charm_temp_dir_path
-            charm_gen_packer.charm_project_path = os.path.join(
-                charm_gen_packer.temp_dir, charm_gen_packer.project_name
+                project_name,
+                project_path=self._charm_temp_dir_path,  # Pass the existing path
             )
 
+            # Update YAML if it exists (it should after init)
             if self._charmcraft_yaml_path:
                 charm_gen_packer.update_charmcraft_yaml(
                     self._charmcraft_yaml_path, status_callback=self.update_status
                 )
 
+            # Pack the charm
+            self.update_status("Packing Charm...")  # Add status update
             self._charm_file_path = charm_gen_packer.pack_charmcraft(
                 status_callback=self.update_status
             )
 
             # --- Bundle ---
-            if not self._rock_file_path:
-                raise RuntimeError("Rock file path not found.")
             self.update_status("Bundling artifacts...")
             zip_path, zip_cleanup = BundleArtifacts(
                 self._rock_file_path, self._charm_file_path
@@ -559,29 +675,57 @@ class GenerateFiles(AccordionStep):
             self.save_bundle_button.disabled = False
             self.save_bundle_button.visible = True
             self.update_status("Bundle created. Click 'Save Bundle' to download.")
+            # Re-enable init buttons after successful bundle
+            self.init_rock_button.disabled = False
+            self.init_charm_button.disabled = False
 
         except Exception as e:
             error_message = f"**ERROR:** {e}"
             self.update_status(error_message, is_log=False)
             print(f"Charm Packing/Bundling error: {e}")
-            self.pack_charm_bundle_button.disabled = False
-        finally:
-            # Clean up job directory
-            if job_id and job_id in JOB_STORE:
-                shutil.rmtree(TEMP_STORAGE_PATH / job_id, ignore_errors=True)
-                del JOB_STORE[job_id]
+            # Re-enable relevant buttons on error
+            self.pack_charm_bundle_button.disabled = False  # Re-enable itself
+            self.edit_charm_button.disabled = False  # Re-enable editing
+            # Also re-enable init buttons if things went wrong
+            self.init_rock_button.disabled = False
+            self.init_charm_button.disabled = False
 
-            # Now we manually clean up the charm temp dir
+        finally:
+            # Clean up job directory (rock source) - only if bundling succeeded or failed here
+            # Maybe keep it if only charm packing failed? Decision needed.
+            # For now, let's assume we clean up rock source if we reached this point.
+            if job_id and job_id in JOB_STORE:
+                job_path_to_clean = JOB_STORE.pop(
+                    job_id
+                )  # Get path and remove from store
+                shutil.rmtree(job_path_to_clean, ignore_errors=True)
+                self.update_status(
+                    f"Cleaned up rock source: {job_path_to_clean}", is_log=True
+                )
+
+            # Clean up charm temp dir ONLY if bundling is done or failed here
             if self._charm_temp_dir_path:
-                shutil.rmtree(self._charm_temp_dir_path, ignore_errors=True)
-                self._charm_temp_dir_path = None
+                path_to_clean = self._charm_temp_dir_path
+                self._charm_temp_dir_path = None  # Clear state first
+                shutil.rmtree(path_to_clean, ignore_errors=True)
+                self.update_status(
+                    f"Cleaned up charm temp dir: {path_to_clean}", is_log=True
+                )
 
             self.page.update()
 
     def on_pack_charm_and_bundle(self, e):
+        # Disable buttons that interfere
         self.pack_charm_bundle_button.disabled = True
         self.edit_charm_button.disabled = True
+        self.init_charm_button.disabled = True  # Prevent re-init during pack/bundle
+        self.init_rock_button.disabled = True  # Prevent rock changes during pack/bundle
+        self.pack_rock_button.disabled = (
+            True  # Prevent rock packing during charm/bundle pack
+        )
+
         self.save_bundle_button.visible = False
+        self.save_bundle_button.disabled = True
         self.page.update()
         thread = threading.Thread(
             target=self.run_charm_packing_and_bundling_in_thread, daemon=True
@@ -592,10 +736,19 @@ class GenerateFiles(AccordionStep):
     def on_save_bundle(self, e):
         if self._generated_zip_path:
             self.save_picker.data = self._generated_zip_path
+            project_name = self.app_state["form_data"].get(
+                "sourceProjectName", "bundle"
+            )
+            save_filename = f"{project_name}-rock-charm.zip"
             self.save_picker.save_file(
-                dialog_title="Save Your Bundle", file_name="rock-and-charm-bundle.zip"
+                dialog_title="Save Your Bundle", file_name=save_filename
             )
             self.save_bundle_button.disabled = True
             self.page.update()
         else:
             self.update_status("Error: No bundle file available to save.")
+
+
+# --- Add freeze_support() for PyInstaller ---
+if __name__ == "__main__":
+    freeze_support()

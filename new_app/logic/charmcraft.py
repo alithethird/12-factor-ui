@@ -14,14 +14,16 @@ INTEGRATION_MAP = {
 
 
 class CharmcraftGenerator:
-    def __init__(self, integrations, config_options, project_name):
+    def __init__(self, integrations, config_options, project_name, project_path):
         self.integrations = integrations  # Store as IDs
         self.config_options = config_options  # Store as dicts
         self.project_name = project_name
         # Create temp dir immediately, store path and cleanup func
-        self.temp_dir_obj = tempfile.TemporaryDirectory(prefix="charm-")
-        self.temp_dir = self.temp_dir_obj.name
-        self.charm_project_path = os.path.join(self.temp_dir, self.project_name)
+        self.temp_dir_obj = None
+        self.temp_dir = project_path  # tempfile.mkdtemp(prefix="charm-")
+        self.charm_project_path = (
+            project_path  # os.path.join(self.temp_dir, self.project_name)
+        )
 
     def _run_command(self, command, cwd, status_callback=None):
         """Runs a command and streams its output."""
@@ -77,7 +79,7 @@ class CharmcraftGenerator:
 
         if status_callback:
             status_callback("Charmcraft initialized.")
-        return yaml_path
+        return yaml_path, self.temp_dir
 
     def update_charmcraft_yaml(self, yaml_path: str, status_callback=None):
         """Reads, modifies, and writes charmcraft.yaml."""
@@ -132,4 +134,6 @@ class CharmcraftGenerator:
 
     def cleanup(self):
         """Cleans up the temporary directory."""
-        self.temp_dir_obj.cleanup()  # Use the TemporaryDirectory object's cleanup
+        if self.temp_dir:
+            shutil.rmtree(self.temp_dir, ignore_errors=True)
+            self.temp_dir = None
