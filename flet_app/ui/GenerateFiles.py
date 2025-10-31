@@ -45,10 +45,11 @@ class GenerateFiles(AccordionStep):
             border_radius=5,
             padding=10,
             height=300,
-            visible=False,
             bgcolor=ft.Colors.WHITE,
             expand=True,
+            visible=False,
         )
+        
         self.save_picker = ft.FilePicker(on_result=self.on_save_dialog_result)
         self.page.overlay.append(self.save_picker)
 
@@ -56,12 +57,11 @@ class GenerateFiles(AccordionStep):
             "Init Rock", on_click=self.on_init_rock, icon=ft.Icons.PLAY_ARROW_ROUNDED
         )
         self.init_charm_button = (
-            ft.ElevatedButton(  # Moved and made initially visible/enabled
+            ft.ElevatedButton(
                 "Init Charm",
                 on_click=self.on_init_charm,
                 icon=ft.Icons.PLAY_ARROW_ROUNDED,  # Changed icon
                 disabled=False,  # Initially enabled
-                visible=True,
             )
         )
         self.edit_rock_button = ft.ElevatedButton(
@@ -69,35 +69,30 @@ class GenerateFiles(AccordionStep):
             on_click=self.on_edit_rockcraft,
             icon=ft.Icons.EDIT,
             disabled=True,
-            visible=False,
         )
         self.pack_rock_button = ft.ElevatedButton(
             "Pack Rock",
             on_click=self.on_pack_rock,
             icon=ft.Icons.ARROW_FORWARD,
             disabled=True,
-            visible=False,
         )
         self.edit_charm_button = ft.ElevatedButton(
             "Edit Charm (Opt.)",
             on_click=self.on_edit_charmcraft,
             icon=ft.Icons.EDIT,
             disabled=True,
-            visible=False,
         )
         self.pack_charm_bundle_button = ft.ElevatedButton(
             "Pack Charm & Bundle",
             on_click=self.on_pack_charm_and_bundle,
             icon=ft.Icons.ARROW_FORWARD,
             disabled=True,
-            visible=False,
         )
         self.save_bundle_button = ft.ElevatedButton(
             "Save Bundle",
             on_click=self.on_save_bundle,
             icon=ft.Icons.SAVE,
             disabled=True,
-            visible=False,
         )
 
         # --- Modals ---
@@ -221,11 +216,9 @@ class GenerateFiles(AccordionStep):
 
     # --- Rock Init ---
     def rock_init(self):
-        job_id = None
         try:
             data = self.app_state["get_form_data"]()
-            job_id = data.get("jobId")
-            project_path = JOB_STORE.get(job_id)
+            project_path = JOB_STORE.get(data.get("jobId"))
             if not project_path:
                 raise ValueError("Job not found or expired.")
             rock_gen = RockcraftGenerator(
@@ -236,9 +229,7 @@ class GenerateFiles(AccordionStep):
             )
             # Enable rock-specific next steps
             self.edit_rock_button.disabled = False
-            self.edit_rock_button.visible = True
             self.pack_rock_button.disabled = False
-            self.pack_rock_button.visible = True
             self.update_status("Rockcraft initialized.")
             # Re-enable charm init button
             self.init_charm_button.disabled = False
@@ -269,13 +260,10 @@ class GenerateFiles(AccordionStep):
         self.log_container.visible = True
         self.log_view.value = "**Starting Rock initialization...**\n\n"
         self.init_rock_button.disabled = True
-        self.edit_rock_button.visible = False
         self.edit_rock_button.disabled = True
-        self.pack_rock_button.visible = False
         self.pack_rock_button.disabled = True
 
         # Hide final steps
-        self.save_bundle_button.visible = False
         self.save_bundle_button.disabled = True
 
         # Clear only rock-related state
@@ -389,13 +377,10 @@ class GenerateFiles(AccordionStep):
         self.init_charm_button.disabled = True
         self.init_rock_button.disabled = True
         # Hide subsequent charm steps
-        self.edit_charm_button.visible = False
         self.edit_charm_button.disabled = True
-        self.pack_charm_bundle_button.visible = False
         self.pack_charm_bundle_button.disabled = True
         # Don't hide rock steps
         # Hide final step
-        self.save_bundle_button.visible = False
         self.save_bundle_button.disabled = True
 
         # Clear only charm-related state
@@ -458,8 +443,6 @@ class GenerateFiles(AccordionStep):
             finally:
                 self._charmcraft_yaml_path = project_path + "/charm/charmcraft.yaml"
                 self.edit_charm_button.disabled = False
-                self.edit_charm_button.visible = True
-                self.pack_charm_bundle_button.visible = True
                 self.pack_charm_bundle_button.disabled = False
                 self.page.update()
 
@@ -578,7 +561,6 @@ class GenerateFiles(AccordionStep):
             self._generated_zip_path = zip_path
             self._zip_cleanup_func = zip_cleanup
             self.save_bundle_button.disabled = False
-            self.save_bundle_button.visible = True
             self.update_status("Bundle created. Click 'Save Bundle' to download.")
             # Re-enable init buttons after successful bundle
             self.init_rock_button.disabled = False
@@ -629,7 +611,6 @@ class GenerateFiles(AccordionStep):
             True  # Prevent rock packing during charm/bundle pack
         )
 
-        self.save_bundle_button.visible = False
         self.save_bundle_button.disabled = True
         self.page.update()
         thread = threading.Thread(
@@ -651,6 +632,4 @@ class GenerateFiles(AccordionStep):
             self.save_bundle_button.disabled = True
             self.page.update()
         else:
-            self.update_status("Error: No bundle file available to save.")
-            self.update_status("Error: No bundle file available to save.")
             self.update_status("Error: No bundle file available to save.")

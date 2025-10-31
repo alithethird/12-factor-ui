@@ -22,7 +22,8 @@ class CharmcraftGenerator:
         print(f"{project_path=}")
         self.charm_project_path = Path(self.temp_dir) / "charm"
         print(f"{self.charm_project_path=}")
-        self.charm_project_path.mkdir()
+        if not self.charm_project_path.exists():
+            self.charm_project_path.mkdir()
 
     def _run_command(self, command, cwd, status_callback=None):
         """Runs a command and streams its output."""
