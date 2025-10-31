@@ -14,7 +14,7 @@ def main(page: ft.Page):
     page.title = "12 Factory"
     page.vertical_alignment = ft.MainAxisAlignment.START
     page.theme_mode = ft.ThemeMode.LIGHT
-    page.window.width = 1200
+    page.window.width = 1250
     page.window.height = 800
     page.scroll = ft.ScrollMode.ADAPTIVE
 
