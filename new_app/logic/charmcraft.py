@@ -14,16 +14,15 @@ INTEGRATION_MAP = {
 
 
 class CharmcraftGenerator:
-    def __init__(self, integrations, config_options, project_name, project_path):
+    def __init__(self, integrations, config_options, project_path, project_name):
         self.integrations = integrations  # Store as IDs
         self.config_options = config_options  # Store as dicts
         self.project_name = project_name
-        # Create temp dir immediately, store path and cleanup func
-        self.temp_dir_obj = None
         self.temp_dir = project_path  # tempfile.mkdtemp(prefix="charm-")
-        self.charm_project_path = (
-            project_path  # os.path.join(self.temp_dir, self.project_name)
-        )
+        print(f"{project_path=}")
+        self.charm_project_path = Path(self.temp_dir) / "charm"
+        print(f"{self.charm_project_path=}")
+        self.charm_project_path.mkdir()
 
     def _run_command(self, command, cwd, status_callback=None):
         """Runs a command and streams its output."""
@@ -69,7 +68,7 @@ class CharmcraftGenerator:
         # Init runs in the parent temp dir, creating the project subdir
         self._run_command(
             ["charmcraft", "init", "--name", self.project_name],
-            cwd=self.temp_dir,
+            cwd=self.charm_project_path,
             status_callback=status_callback,
         )
 

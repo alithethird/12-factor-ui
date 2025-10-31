@@ -1,22 +1,21 @@
+
 import flet as ft
-
-# Import UI components
-from ui.SelectFramework import SelectFramework
-from ui.UploadCode import UploadCode
-from ui.SelectIntegrations import SelectIntegrations
-from ui.ConfigOptions import ConfigOptions
-from ui.GenerateFiles import GenerateFiles
-
 # Import state management
 from state import TEMP_STORAGE_PATH
+from ui.ConfigOptions import ConfigOptions
+from ui.GenerateFiles import GenerateFiles
+# Import UI components
+from ui.SelectFramework import SelectFramework
+from ui.SelectIntegrations import SelectIntegrations
+from ui.UploadCode import UploadCode
 
 
 def main(page: ft.Page):
     page.title = "12 Factory"
     page.vertical_alignment = ft.MainAxisAlignment.START
     page.theme_mode = ft.ThemeMode.LIGHT
-    page.window_width = 800
-    page.window_height = 1200
+    page.window.width = 1200
+    page.window.height = 800
     page.scroll = ft.ScrollMode.ADAPTIVE
 
     # --- Application State ---
@@ -49,7 +48,7 @@ def main(page: ft.Page):
         if "source" in new_data and new_data["source"]:
             app_state["form_data"]["sourceProjectName"] = new_data["source"].get(
                 "projectName"
-            )
+            ).replace(" ", "_").replace("-", "_").lower()
         page.update()
 
     # --- Main Layout ---

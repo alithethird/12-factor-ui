@@ -1,7 +1,7 @@
-import subprocess
-import os
 import glob
+import os
 import shutil
+import subprocess
 from pathlib import Path  # Import Path
 
 
@@ -37,7 +37,7 @@ class RockcraftGenerator:
                 if "init" in command:
                     status_callback(f"rock-init: {line.strip()}", is_log=True)
                 else:
-                    status_callback(f"rock-pack: {line.strip()}", is_log=True)
+                    status_callback(f'rock-pack: {line.strip()}', is_log=True)
 
         process.stdout.close()
         return_code = process.wait()
