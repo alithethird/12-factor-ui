@@ -1,8 +1,8 @@
-import subprocess
 import os
 import shutil
-from urllib.parse import urlparse
+import subprocess
 from pathlib import Path
+from urllib.parse import urlparse
 
 # TODO:
 # - When it can not find the subfolder in git it doesn't error out here
@@ -11,11 +11,11 @@ from pathlib import Path
 
 class GithubDownloader:
     def __init__(self, repo_url: str, branch: str, subfolder: str | None):
-        if not repo_url:
-            raise ValueError("Repository URL cannot be empty.")
-        self.repo_url = repo_url
+        # if not repo_url:
+        #     raise ValueError("Repository URL cannot be empty.")
+        self.repo_url = repo_url if repo_url else "https://github.com/canonical/paas-charm"
         self.branch = branch
-        self.subfolder = subfolder
+        self.subfolder = subfolder if repo_url else "examples/flask-minimal/flask_minimal_app"
 
     def download(self, target_dir):
         """

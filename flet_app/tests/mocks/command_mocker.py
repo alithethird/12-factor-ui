@@ -33,7 +33,7 @@ class MockStdout:
 class MockSubprocessPopen:
     """Mock subprocess.Popen that simulates command execution with artifact creation."""
 
-    def __init__(self, args, cwd=None, stdout=None, stderr=None, text=None, bufsize=None, env=None):
+    def __init__(self, args, cwd=None, stdout=None, stderr=None, text=None, bufsize=None, env=None, preexec_fn=None):
         """Initialize the mock process."""
         self.args = args
         self.cwd = cwd or os.getcwd()

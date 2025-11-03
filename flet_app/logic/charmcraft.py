@@ -46,9 +46,9 @@ class CharmcraftGenerator:
         for line in iter(process.stdout.readline, ""):
             if status_callback:
                 if "init" in command:
-                    status_callback(f"charm-init: {line.strip()}", is_log=True)
+                    status_callback(f"charm-init: {line.strip()}")
                 else:
-                    status_callback(f"charm-pack: {line.strip()}", is_log=True)
+                    status_callback(f"charm-pack: {line.strip()}")
 
         process.stdout.close()
         return_code = process.wait()
@@ -74,7 +74,7 @@ class CharmcraftGenerator:
         self._run_command(
             ["charmcraft", "init", "--name", self.project_name],
             cwd=self.charm_project_path,
-            status_callback=status_callback,
+            status_callback=print,
         )
 
         yaml_path = os.path.join(self.charm_project_path, "charmcraft.yaml")
@@ -125,7 +125,7 @@ class CharmcraftGenerator:
         self._run_command(
             ["charmcraft", "pack"],
             cwd=self.charm_project_path,
-            status_callback=status_callback,
+            status_callback=print,
         )
 
         charm_files = glob.glob(os.path.join(self.charm_project_path, "*.charm"))
@@ -133,7 +133,7 @@ class CharmcraftGenerator:
             raise FileNotFoundError("Could not find generated .charm file")
 
         if status_callback:
-            status_callback("Charm packing complete.")
+            status_callback("Charm packing complete: " + charm_files[0])
         return charm_files[0]
 
     def cleanup(self):

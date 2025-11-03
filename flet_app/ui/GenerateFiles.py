@@ -2,6 +2,7 @@
 # Import logic modules
 # Import state
 import shutil
+import subprocess
 import threading
 from pathlib import Path
 
@@ -24,8 +25,10 @@ class GenerateFiles(AccordionStep):
         self._zip_cleanup_func = None
         self._rockcraft_yaml_path = None
         self._rock_file_path = None
+        self._rock_pack_complete = False
         self._charmcraft_yaml_path = None
         self._charm_file_path = None
+        self._charm_pack_complete = False
         self._charm_temp_dir_path = None
 
         # --- UI Controls ---
@@ -167,6 +170,15 @@ class GenerateFiles(AccordionStep):
             content_control=content_control,
         )
 
+    # --- Helper Methods ---
+    def _check_both_packs_complete(self):
+        """Check if both rock and charm packs are complete and enable save bundle button if so."""
+        if self._rock_pack_complete and self._charm_pack_complete:
+            self.save_bundle_button.disabled = False
+            self.page.update()
+            return True
+        return False
+
     # --- Event Handlers and Logic ---
     def on_save_dialog_result(self, e: ft.FilePickerResultEvent):
         zip_path = self._generated_zip_path
@@ -244,16 +256,40 @@ class GenerateFiles(AccordionStep):
     def rock_pack(self, framework, project_path, project_name):
         """
         Process target function for packing the rock.
-        Sends logs and results back through the queue.
+        Wraps the pack operation with better error detection.
         """
 
         if not project_path:
             raise ValueError("Job not found or expired.")
 
-        rock_gen = RockcraftGenerator(project_path, project_name, framework)
-        self._rock_file_path = rock_gen.pack_rockcraft(status_callback=self.update_status)
-
-        self.update_status(f"ROCK_SUCCESS: {self._rock_file_path}")
+        try:
+            rock_gen = RockcraftGenerator(project_path, project_name, framework)
+            self._rock_file_path = rock_gen.pack_rockcraft(status_callback=self.update_status)
+            
+            # Mark rock pack as complete
+            self._rock_pack_complete = True
+            self._check_both_packs_complete()
+            
+        except subprocess.TimeoutExpired as te:
+            self.update_status(
+                f"**ERROR:** Rock packing operation timed out after {te.timeout} seconds. "
+                "The project is likely too large or your system doesn't have enough resources. "
+                "Try reducing dependencies or running on a machine with more RAM/CPU."
+            )
+            self._rock_pack_complete = False
+            raise
+        except Exception as e:
+            error_msg = str(e)
+            if "killed" in error_msg.lower() or "signal" in error_msg.lower():
+                self.update_status(
+                    "**ERROR:** Rock packing was terminated by the system. "
+                    "This usually means the system ran out of memory. "
+                    "Close other applications and try again with a simpler project."
+                )
+            else:
+                self.update_status(f"**ERROR:** Rock packing failed: {e}")
+            self._rock_pack_complete = False
+            raise
     def on_init_rock(self, e):
         self.log_container.visible = True
         self.log_view.value += "**Starting Rock initialization...**\n\n"
@@ -267,6 +303,7 @@ class GenerateFiles(AccordionStep):
         # Clear only rock-related state
         self._rockcraft_yaml_path = None
         self._rock_file_path = None
+        self._rock_pack_complete = False
 
         # Clear bundle state
         self._generated_zip_path = None
@@ -343,7 +380,21 @@ class GenerateFiles(AccordionStep):
                 p_rock.join()
 
             except Exception as ex:
-                self.update_status(f"**ERROR:** {ex}", is_log=False)
+                error_msg = str(ex)
+                # Provide helpful error messages for common issues
+                if "timed out" in error_msg.lower():
+                    self.update_status(
+                        f"**ERROR:** Rock packing timed out. The project may be too large or your system may not have enough resources. Try reducing project complexity or closing other applications.",
+                        is_log=False
+                    )
+                elif "killed" in error_msg.lower() or "memory" in error_msg.lower():
+                    self.update_status(
+                        f"**ERROR:** Rock packing was terminated due to insufficient system resources. Close other applications and try again.",
+                        is_log=False
+                    )
+                else:
+                    self.update_status(f"**ERROR:** {ex}", is_log=False)
+                
                 # Re-enable buttons on error
                 self.pack_rock_button.disabled = False
                 self.edit_rock_button.disabled = False
@@ -351,9 +402,13 @@ class GenerateFiles(AccordionStep):
                 self.init_charm_button.disabled = False
                 # Keep bundle disabled if error occurred here
                 self.pack_charm_button.disabled = True
+                self._rock_pack_complete = False
             finally:
-
-                self.update_status("Rock packed successfully.")
+                if not hasattr(self, '_rock_pack_complete') or not self._rock_pack_complete:
+                    # Only show success message if rock pack actually completed
+                    pass
+                else:
+                    self.update_status("Rock packed successfully.")
                 # Re-enable relevant buttons
                 self.edit_rock_button.disabled = False
                 self.init_rock_button.disabled = False  # Can re-init now
@@ -382,6 +437,7 @@ class GenerateFiles(AccordionStep):
         # Clear only charm-related state
         self._charmcraft_yaml_path = None
         self._charm_file_path = None
+        self._charm_pack_complete = False
         if self._charm_temp_dir_path:  # Clean up previous charm temp dir IF IT EXISTS
             shutil.rmtree(self._charm_temp_dir_path, ignore_errors=True)
             self._charm_temp_dir_path = None
@@ -537,7 +593,10 @@ class GenerateFiles(AccordionStep):
             self._charm_file_path = charm_gen_packer.pack_charmcraft(
                 status_callback=self.update_status
             )
-            self.save_bundle_button.disabled = False
+            
+            # Mark charm pack as complete and check if both are done
+            self._charm_pack_complete = True
+            self._check_both_packs_complete()
 
         except Exception as e:
             error_message = f"**ERROR:** {e}"
@@ -574,6 +633,7 @@ class GenerateFiles(AccordionStep):
             target=self.run_bundling_in_thread, daemon=True
         )
         thread.start()
+        thread.join()
         if self._generated_zip_path:
             self.save_picker.data = self._generated_zip_path
             project_name = self.app_state["form_data"].get(
@@ -616,7 +676,7 @@ class GenerateFiles(AccordionStep):
             self._generated_zip_path = zip_path
             self._zip_cleanup_func = zip_cleanup
             self.save_bundle_button.disabled = False
-            self.update_status("Bundle created. Click 'Save Bundle' to download.")
+            self.update_status("Bundle created.")
             # Re-enable init buttons after successful bundle
             self.init_rock_button.disabled = False
             self.init_charm_button.disabled = False
