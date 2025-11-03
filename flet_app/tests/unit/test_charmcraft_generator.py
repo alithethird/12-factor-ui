@@ -1,8 +1,7 @@
 """Unit tests for CharmcraftGenerator."""
-import os
-import tempfile
+
 from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 import pytest
 import yaml
@@ -54,7 +53,9 @@ class TestCharmcraftGenerator:
 
         assert generator.config_options == config_options
 
-    def test_init_charmcraft_creates_yaml(self, temp_project_dir, mock_which, mock_popen):
+    def test_init_charmcraft_creates_yaml(
+        self, temp_project_dir, mock_which, mock_popen
+    ):
         """Test that init_charmcraft creates the charmcraft.yaml file."""
         generator = CharmcraftGenerator(
             integrations=[],
@@ -95,11 +96,18 @@ class TestCharmcraftGenerator:
         assert "metrics-endpoint" in updated_yaml["requires"]
 
     @patch("subprocess.Popen")
-    def test_update_charmcraft_yaml_with_config_options(self, mock_popen, temp_project_dir):
+    def test_update_charmcraft_yaml_with_config_options(
+        self, mock_popen, temp_project_dir
+    ):
         """Test updating charmcraft.yaml with config options."""
         config_options = [
             {"key": "port", "type": "int", "value": "8000", "isOptional": True},
-            {"key": "app-name", "type": "string", "value": "myapp", "isOptional": False},
+            {
+                "key": "app-name",
+                "type": "string",
+                "value": "myapp",
+                "isOptional": False,
+            },
         ]
 
         generator = CharmcraftGenerator(
@@ -207,7 +215,9 @@ class TestCharmcraftGenerator:
                 cwd=temp_project_dir,
             )
 
-    def test_run_command_with_status_callback(self, temp_project_dir, mock_which, mock_popen):
+    def test_run_command_with_status_callback(
+        self, temp_project_dir, mock_which, mock_popen
+    ):
         """Test that _run_command calls status callback."""
         generator = CharmcraftGenerator(
             integrations=[],

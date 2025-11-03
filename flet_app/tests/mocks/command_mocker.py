@@ -70,6 +70,15 @@ class MockSubprocessPopen:
         if hasattr(self.stdout, "close"):
             self.stdout.close()
 
+    def __enter__(self):
+        """Support context manager protocol for subprocess.run()."""
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """Support context manager protocol for subprocess.run()."""
+        self.close()
+        return False
+
     def wait(self, timeout=None):
         """Wait for the mock process to complete and create artifacts."""
         if not self._process_started:
@@ -86,6 +95,24 @@ class MockSubprocessPopen:
             thread.join(timeout=5)  # Wait up to 5 seconds for artifact creation
 
         return self.returncode
+
+    def communicate(self, input=None, timeout=None):
+        """Simulate subprocess.communicate() for subprocess.run() compatibility."""
+        self.wait(timeout)
+        # Return (stdout, stderr) tuple
+        return (b"", b"")
+
+    def poll(self):
+        """Return the returncode to check if process has finished."""
+        return self.returncode
+
+    def kill(self):
+        """Simulate killing the process."""
+        pass
+
+    def terminate(self):
+        """Simulate terminating the process."""
+        pass
 
     def _create_mock_artifacts(self):
         """Create mock .rock or .charm files based on command."""
@@ -122,6 +149,7 @@ description: A test rock for unit testing.
             # Create a basic charmcraft.yaml file
             yaml_path = Path(self.cwd) / "charmcraft.yaml"
             yaml_content = """name: test-charm
+type: charm
 version: 1.0
 summary: Test charm
 description: A test charm for unit testing.

@@ -45,7 +45,11 @@ class CharmcraftGenerator:
         )
         for line in iter(process.stdout.readline, ""):
             if status_callback:
-                status_callback(line.strip(), is_log=True)
+                if "init" in command:
+                    status_callback(f"charm-init: {line.strip()}", is_log=True)
+                else:
+                    status_callback(f"charm-pack: {line.strip()}", is_log=True)
+
         process.stdout.close()
         return_code = process.wait()
         if return_code != 0:
