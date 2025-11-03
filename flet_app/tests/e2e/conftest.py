@@ -149,3 +149,98 @@ def django_zip(temp_project_dir):
         }
     
     return _create_zip
+
+
+@pytest.fixture
+def download_canonical_flask_minimal(temp_project_dir):
+    """Fixture to download canonical/paas-charm flask-minimal example."""
+    def _download() -> dict:
+        """Download flask-minimal from canonical/paas-charm GitHub repo.
+        
+        Downloads the entire examples/flask-minimal directory and extracts
+        just the flask_minimal_app subdirectory.
+        """
+        from logic.downloader import GithubDownloader
+        
+        # Download the entire flask-minimal directory
+        downloader = GithubDownloader(
+            repo_url="https://github.com/canonical/paas-charm",
+            branch="main",
+            subfolder="examples/flask-minimal",
+        )
+        
+        result = downloader.download(temp_project_dir)
+        
+        # The result path will be examples/flask-minimal
+        # We need to use examples/flask-minimal/flask_minimal_app for the Flask app
+        import os
+        app_path = os.path.join(result["path"], "flask_minimal_app")
+        
+        return {
+            "path": app_path,
+            "project_name": "flask_minimal_app",
+        }
+    
+    return _download
+
+
+@pytest.fixture
+def mock_pack_commands(monkeypatch):
+    """Mock subprocess.run for pack commands but allow git to work."""
+    from unittest.mock import patch, MagicMock
+    from tests.mocks.command_mocker import MockSubprocessPopen
+    
+    original_run = __import__('subprocess').run
+    
+    def selective_run(args, *pargs, **kwargs):
+        """Run git commands normally, but mock pack commands."""
+        # Check if this is a git command
+        if isinstance(args, list) and 'git' in args[0]:
+            # Use the original subprocess.run for git commands
+            return original_run(args, *pargs, **kwargs)
+        
+        # For rockcraft and charmcraft pack commands, mock them
+        if isinstance(args, list) and any(cmd in ' '.join(args) for cmd in ['rockcraft pack', 'charmcraft pack']):
+            # Create a mock Popen object that will handle packing
+            mock_popen = MockSubprocessPopen(args, cwd=kwargs.get('cwd'), 
+                                           stdout=kwargs.get('stdout'),
+                                           stderr=kwargs.get('stderr'),
+                                           text=kwargs.get('text'))
+            # For subprocess.run compatibility, return a CompletedProcess-like object
+            class CompletedProcess:
+                def __init__(self, popen_obj):
+                    self.returncode = popen_obj.returncode
+                    self.stdout = ''
+                    self.stderr = ''
+                    self.args = popen_obj.args
+            
+            mock_popen.wait()
+            return CompletedProcess(mock_popen)
+        
+        # For other commands, use original
+        return original_run(args, *pargs, **kwargs)
+    
+    monkeypatch.setattr("subprocess.run", selective_run)
+    return selective_run
+
+
+@pytest.fixture
+def mock_pack_commands_popen(monkeypatch):
+    """Mock subprocess.Popen for pack commands but allow git to work via subprocess.run."""
+    from tests.mocks.command_mocker import MockSubprocessPopen
+    
+    original_popen = __import__('subprocess').Popen
+    
+    def selective_popen(*args, **kwargs):
+        """Use mock Popen for rockcraft/charmcraft, original for git."""
+        # If this is a git command, use original Popen
+        cmd = args[0] if args else []
+        if isinstance(cmd, list) and cmd and 'git' in cmd[0]:
+            return original_popen(*args, **kwargs)
+        
+        # For rockcraft and charmcraft, use the mock
+        return MockSubprocessPopen(*args, **kwargs)
+    
+    monkeypatch.setattr("subprocess.Popen", selective_popen)
+    return selective_popen
+

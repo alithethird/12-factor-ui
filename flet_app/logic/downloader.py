@@ -60,11 +60,15 @@ class GithubDownloader:
             sparse_checkout_file = (
                 Path(target_dir) / ".git" / "info" / "sparse-checkout"
             )
-            # Ensure the directory path ends with '/*' to get its contents
-            dir_pattern = self.subfolder.strip("/") + "/*"
+            # Include both the directory and all its contents recursively
+            dir_pattern = self.subfolder.strip("/")
+            # Create parent directories if they don't exist
+            sparse_checkout_file.parent.mkdir(parents=True, exist_ok=True)
             with open(sparse_checkout_file, "w") as f:
+                # Write the directory pattern and its contents pattern
                 f.write(f"{dir_pattern}\n")
-            print(f"Wrote '{dir_pattern}' to {sparse_checkout_file}")
+                f.write(f"{dir_pattern}/**\n")
+            print(f"Wrote patterns to {sparse_checkout_file}")
 
             # 5. Pull only the specified directory (shallowly)
             # Replace 'main' with the desired branch if needed
