@@ -1,12 +1,84 @@
 """Pytest configuration and shared fixtures."""
+import os
 import shutil
+import subprocess
 import tempfile
+import time
 from pathlib import Path
 from unittest.mock import patch
 
 import pytest
 
 from tests.mocks.command_mocker import MockSubprocessPopen, create_status_callback_mock
+
+
+@pytest.fixture(scope="session")
+def flet_server_session():
+    """Start Flet app in web mode on a fixed port for the test session."""
+    port = 8000
+    env = os.environ.copy()
+    env["FLET_FORCE_WEB_SERVER"] = "true"
+    env["FLET_SERVER_PORT"] = str(port)
+    
+    # Start the Flet app in web mode
+    flet_process = subprocess.Popen(
+        ["python", "main.py"],
+        cwd="/home/ali-ugur/dev/12-factor-ui/flet_app",
+        env=env,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    
+    # Wait for the server to start
+    max_retries = 30
+    retry_count = 0
+    while retry_count < max_retries:
+        try:
+            import socket
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            result = sock.connect_ex(("127.0.0.1", port))
+            sock.close()
+            if result == 0:
+                break
+        except Exception:
+            pass
+        time.sleep(0.5)
+        retry_count += 1
+    
+    if retry_count == max_retries:
+        flet_process.terminate()
+        raise RuntimeError(f"Flet server failed to start on port {port}")
+    
+    yield f"http://127.0.0.1:{port}"
+    
+    # Cleanup
+    flet_process.terminate()
+    try:
+        flet_process.wait(timeout=5)
+    except subprocess.TimeoutExpired:
+        flet_process.kill()
+
+
+@pytest.fixture
+def browser():
+    """Create a Playwright browser instance."""
+    from playwright.sync_api import sync_playwright
+    
+    playwright = sync_playwright().start()
+    browser = playwright.chromium.launch(headless=True)
+    yield browser
+    browser.close()
+    playwright.stop()
+
+
+@pytest.fixture
+def page(browser, flet_server_session):
+    """Create a Playwright page and navigate to the Flet app."""
+    context = browser.new_context()
+    page = context.new_page()
+    page.goto(flet_server_session)
+    yield page
+    context.close()
 
 
 @pytest.fixture
@@ -17,6 +89,35 @@ def temp_project_dir():
     # Cleanup
     if Path(temp_dir).exists():
         shutil.rmtree(temp_dir, ignore_errors=True)
+
+
+@pytest.fixture
+def download_canonical_flask_minimal(temp_project_dir):
+    """Fixture to download canonical/paas-charm flask-minimal example."""
+    def _download() -> dict:
+        """Download flask-minimal from canonical/paas-charm GitHub repo."""
+        from logic.downloader import GithubDownloader
+        
+        # Download the entire flask-minimal directory
+        downloader = GithubDownloader(
+            repo_url="https://github.com/canonical/paas-charm",
+            branch="main",
+            subfolder="examples/flask-minimal",
+        )
+        
+        result = downloader.download(temp_project_dir)
+        
+        # The result path will be examples/flask-minimal
+        # We need to use examples/flask-minimal/flask_minimal_app for the Flask app
+        app_path = os.path.join(result["path"], "flask_minimal_app")
+        
+        return {
+            "path": app_path,
+            "project_name": "flask_minimal_app",
+        }
+    
+    return _download
+
 
 
 @pytest.fixture
