@@ -96,7 +96,7 @@ class RockcraftGenerator:
                     pass
 
             if status_callback:
-                status_callback(f"Process error: {str(e)}", is_log=True)
+                status_callback(f"Process error: {str(e)}")
             raise
 
     def init_rockcraft(self, status_callback=None) -> str:

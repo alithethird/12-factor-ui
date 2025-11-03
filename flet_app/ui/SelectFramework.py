@@ -12,7 +12,7 @@ class SelectFramework(AccordionStep):
             {"id": "fastapi", "name": "FastAPI", "logo_path": "fastapi.svg"},
             {"id": "go", "name": "Go", "logo_path": "go.svg"},
             {"id": "expressjs", "name": "Express.js", "logo_path": "expressjs.svg"},
-            {"id": "springboot", "name": "Spring Boot", "logo_path": "spring-boot.svg"},
+            {"id": "spring-boot", "name": "Spring Boot", "logo_path": "spring-boot.svg"},
         ]
 
         def on_framework_select(e):
