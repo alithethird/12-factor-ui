@@ -1,7 +1,7 @@
 import os
-import shutil
 import tarfile
 import zipfile
+
 
 class ArchiveExtractor:
     def __init__(self, archive_path, original_filename):
@@ -10,10 +10,10 @@ class ArchiveExtractor:
 
     def extract(self, target_dir):
         """Extracts an archive to a target directory."""
-        if self.original_filename.endswith('.zip'):
-            with zipfile.ZipFile(self.archive_path, 'r') as zip_ref:
+        if self.original_filename.endswith(".zip"):
+            with zipfile.ZipFile(self.archive_path, "r") as zip_ref:
                 zip_ref.extractall(target_dir)
-        elif self.original_filename.endswith(('.tar.gz', '.tar')):
+        elif self.original_filename.endswith((".tar.gz", ".tar")):
             with tarfile.open(self.archive_path) as tar_ref:
                 tar_ref.extractall(target_dir)
         else:
@@ -23,12 +23,23 @@ class ArchiveExtractor:
 
     def _find_project_root(self, base_path):
         """Finds a nested project root if one exists."""
-        items = [name for name in os.listdir(base_path) if not name.startswith('.') and name != '__MACOSX']
+        items = [
+            name
+            for name in os.listdir(base_path)
+            if not name.startswith(".") and name != "__MACOSX"
+        ]
         if len(items) == 1 and os.path.isdir(os.path.join(base_path, items[0])):
             return {
-                'root_path': os.path.join(base_path, items[0]),
-                'project_name': items[0]
+                "root_path": os.path.join(base_path, items[0]),
+                "project_name": items[0],
             }
-        
-        project_name = self.original_filename.replace('.zip', '').replace('.tar.gz', '').replace('.tar', '')
-        return {'root_path': base_path, 'project_name': project_name}
+
+        project_name = (
+            self.original_filename.replace(".zip", "")
+            .replace(".tar.gz", "")
+            .replace(".tar", "")
+            .replace("_", "-")
+            .lower()
+            .replace(" ", "-")
+        )
+        return {"root_path": base_path, "project_name": project_name}

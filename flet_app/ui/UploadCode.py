@@ -1,14 +1,15 @@
 import flet as ft
 import shutil
-import time
 import uuid
 
 from .AccordionStep import AccordionStep
 from logic.downloader import GithubDownloader
 from logic.extractor import ArchiveExtractor
 from logic.processor import ApplicationProcessor
+
 # Import from the new state management file
 from state import TEMP_STORAGE_PATH, JOB_STORE
+
 
 class UploadCode(AccordionStep):
     def __init__(self, app_state):
@@ -16,12 +17,21 @@ class UploadCode(AccordionStep):
         page = self.app_state["page"]
 
         # --- Define Controls for this step ---
-        repo_url_field = ft.TextField(label="GitHub Repository URL", hint_text="https://github.com/user/repo")
-        
+        info_text = ft.Text(
+            "Use the subfolder area if your app is in a folder in GitHub repository.",
+            size=15,
+            italic=True,
+        )
+        repo_url_field = ft.TextField(
+            label="GitHub repository URL", hint_text="https://github.com/user/repo"
+        )
+        repo_branch_field = ft.TextField(label="GitHub branch", hint_text="main")
+        repo_folder_field = ft.TextField(label="Subfolder name", hint_text="app")
+
         # The FilePicker needs to be in the page's overlay
         file_picker = ft.FilePicker(on_result=lambda e: on_file_picked(e))
         page.overlay.append(file_picker)
-        
+
         file_picker_button = ft.ElevatedButton(
             "Select Archive...",
             on_click=lambda _: file_picker.pick_files(
@@ -30,7 +40,15 @@ class UploadCode(AccordionStep):
         )
         selected_file_text = ft.Text("No file selected.")
 
-        github_view = ft.Column([repo_url_field], visible=True)
+        github_view = ft.Column(
+            [
+                info_text,
+                repo_url_field,
+                repo_branch_field,
+                repo_folder_field,
+            ],
+            visible=True,
+        )
         upload_view = ft.Column([file_picker_button, selected_file_text], visible=False)
 
         def on_file_picked(e: ft.FilePickerResultEvent):
@@ -72,10 +90,19 @@ class UploadCode(AccordionStep):
 
             try:
                 if tabs.selected_index == 0:
-                    downloader = GithubDownloader(repo_url_field.value)
+                    downloader = GithubDownloader(
+                        repo_url_field.value,
+                        repo_branch_field.value,
+                        repo_folder_field.value if repo_folder_field.value else None,
+                    )
                     result = downloader.download(str(job_dir))
                     project_path = result["path"]
-                    project_name = result["project_name"]
+                    project_name = (
+                        result["project_name"]
+                        .replace("_", "-")
+                        .replace(" ", "-")
+                        .lower()
+                    )
                     source_info = {"type": "github", "projectName": project_name}
                 else:
                     file_data = selected_file_text.data
@@ -84,7 +111,12 @@ class UploadCode(AccordionStep):
                     extractor = ArchiveExtractor(file_data.path, file_data.name)
                     result = extractor.extract(str(job_dir))
                     project_path = result["root_path"]
-                    project_name = result["project_name"]
+                    project_name = (
+                        result["project_name"]
+                        .replace("_", "-")
+                        .replace(" ", "-")
+                        .lower()
+                    )
                     source_info = {"type": "upload", "projectName": project_name}
 
                 processor = ApplicationProcessor(
@@ -93,7 +125,9 @@ class UploadCode(AccordionStep):
                 processor.check_project()
 
                 JOB_STORE[job_id] = project_path
-                self.app_state["update_form_data"]({"jobId": job_id, "source": source_info})
+                self.app_state["update_form_data"](
+                    {"jobId": job_id, "source": source_info}
+                )
                 self.update_summary(f"Source: {project_name}")
                 self.app_state["set_active_step"](3)
 
