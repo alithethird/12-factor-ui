@@ -94,6 +94,7 @@ class UploadCode(AccordionStep):
                         repo_url_field.value,
                         repo_branch_field.value,
                         repo_folder_field.value if repo_folder_field.value else None,
+                        self.app_state["form_data"]["framework"]
                     )
                     result = downloader.download(str(job_dir))
                     project_path = result["path"]

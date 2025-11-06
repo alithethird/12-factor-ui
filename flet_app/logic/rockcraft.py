@@ -12,7 +12,7 @@ class RockcraftGenerator:
         self.framework = framework
         self.project_name = project_name.replace("_", "-").lower().replace(" ", "-")
 
-    def _run_command(self, command, status_callback=None, timeout=3600):
+    def _run_command(self, command, status_callback=None, timeout=3600, cwd=None):
         """
         Runs a command and streams its output to the status_callback.
 
@@ -20,6 +20,7 @@ class RockcraftGenerator:
             command: List of command arguments
             status_callback: Optional callback function for status updates
             timeout: Maximum time in seconds to allow the process to run (default: 3600s = 1 hour)
+            cwd: Working directory for the command (default: self.project_path)
 
         Raises:
             subprocess.TimeoutExpired: If the process exceeds the timeout
@@ -43,7 +44,7 @@ class RockcraftGenerator:
         try:
             process = subprocess.Popen(
                 [cmd_path] + command[1:],
-                cwd=self.project_path,
+                cwd=cwd or self.project_path,
                 env={"ROCKCRAFT_ENABLE_EXPERIMENTAL_EXTENSIONS": "true"},
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,  # Combine stdout and stderr
@@ -103,8 +104,17 @@ class RockcraftGenerator:
         """Initializes Rockcraft and returns the path to rockcraft.yaml."""
         if status_callback:
             status_callback("Initializing Rockcraft...")
-        if Path(self.project_path + "/rockcraft.yaml").exists():
-            os.remove(self.project_path + "/rockcraft.yaml")
+        
+        # For ExpressJS, run rockcraft init in parent directory
+        if self.framework == "expressjs":
+            init_cwd = str(Path(self.project_path).parent)
+            yaml_path = os.path.join(init_cwd, "rockcraft.yaml")
+        else:
+            init_cwd = self.project_path
+            yaml_path = os.path.join(self.project_path, "rockcraft.yaml")
+        
+        if Path(yaml_path).exists():
+            os.remove(yaml_path)
 
         init_command = [
             "rockcraft",
@@ -113,9 +123,8 @@ class RockcraftGenerator:
             f"--name={self.project_name}",
         ]
         # Init typically completes within 5 minutes
-        self._run_command(init_command, print, timeout=300)
+        self._run_command(init_command, print, timeout=300, cwd=init_cwd)
 
-        yaml_path = os.path.join(self.project_path, "rockcraft.yaml")
         if not os.path.exists(yaml_path):
             raise FileNotFoundError("rockcraft.yaml not found after init.")
 
@@ -132,10 +141,19 @@ class RockcraftGenerator:
         """
         if status_callback:
             status_callback("Packing Rock... this may take 5-30 minutes depending on project size...")
+        
+        # For ExpressJS, run rockcraft pack in parent directory (where rockcraft.yaml is)
+        if self.framework == "expressjs":
+            pack_cwd = str(Path(self.project_path).parent)
+            rock_search_path = pack_cwd
+        else:
+            pack_cwd = self.project_path
+            rock_search_path = self.project_path
+        
         # Pack can take a long time for large projects, allow up to 1 hour
-        self._run_command(["rockcraft", "pack"], print, timeout=3600)
+        self._run_command(["rockcraft", "pack"], print, timeout=3600, cwd=pack_cwd)
 
-        rock_files = glob.glob(os.path.join(self.project_path, "*.rock"))
+        rock_files = glob.glob(os.path.join(rock_search_path, "*.rock"))
         if not rock_files:
             raise FileNotFoundError("Could not find generated .rock file")
 

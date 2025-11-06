@@ -10,12 +10,23 @@ from urllib.parse import urlparse
 
 
 class GithubDownloader:
-    def __init__(self, repo_url: str, branch: str, subfolder: str | None):
+    def __init__(self, repo_url: str, branch: str, subfolder: str | None, framework: str = "flask"):
         # if not repo_url:
         #     raise ValueError("Repository URL cannot be empty.")
         self.repo_url = repo_url if repo_url else "https://github.com/canonical/paas-charm"
         self.branch = branch
-        self.subfolder = subfolder if repo_url else "examples/flask-minimal/flask_minimal_app"
+        
+        # Map frameworks to their example paths in paas-charm
+        framework_paths = {
+            "flask": "examples/flask-minimal/flask_minimal_app",
+            "django": "examples/django/django_app",
+            "expressjs": "examples/expressjs/app",
+            "fastapi": "examples/fastapi/fastapi_app",
+            "go": "examples/go/go_app",
+            "spring-boot": "examples/springboot/spring-boot_app",
+        }
+        
+        self.subfolder = subfolder if repo_url else framework_paths.get(framework, "examples/flask-minimal/flask_minimal_app")
 
     def download(self, target_dir):
         """
