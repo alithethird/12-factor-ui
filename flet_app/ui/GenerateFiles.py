@@ -547,6 +547,12 @@ class GenerateFiles(AccordionStep):
                 project_name,
             )
             yaml_path, temp_dir = charm_gen.init_charmcraft(status_callback=self.update_status)
+        
+            # Update YAML if it exists (it should after init)
+            if yaml_path:
+                charm_gen.update_charmcraft_yaml(
+                    yaml_path, status_callback=self.update_status
+                )
         except Exception as e:
             self.update_status(f"ERROR: {str(e)}")
 
@@ -583,11 +589,6 @@ class GenerateFiles(AccordionStep):
                 project_name=project_name,
             )
 
-            # # Update YAML if it exists (it should after init)
-            # if self._charmcraft_yaml_path:
-            #     charm_gen_packer.update_charmcraft_yaml(
-            #         self._charmcraft_yaml_path, status_callback=self.update_status
-            #     )
 
             # Pack the charm
             self._charm_file_path = charm_gen_packer.pack_charmcraft(

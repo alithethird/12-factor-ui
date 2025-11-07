@@ -2,13 +2,26 @@ import glob
 import os
 import shutil
 import subprocess
-from pathlib import Path  # Import Path
+from pathlib import Path
 
 import yaml
 
 INTEGRATION_MAP = {
-    "postgresql": {"db": {"interface": "postgresql_client"}},
-    "prometheus": {"metrics-endpoint": {"interface": "prometheus_scrape"}},
+    "prometheus": {"type": "provide", "integration":{"metrics-endpoint": {"interface": "prometheus_scrape"}}},
+    "grafana": {"type": "provide", "integration":{"grafana-dashboard": {"interface": "grafana_dashboard"}}},
+    "ingress": {"type": "require", "integration":{"ingress": {"interface": "ingress", "limit": 1}}},
+    "loki": {
+        "type": "require", "integration":{"logging": {"interface": "loki_push_api"}}},
+    "postgresql": {"type": "require", "integration":{"postgresql": {"interface": "postgresql_client", "limit": 1}}},
+    "tracing": {"type": "require", "integration":{"tracing": {"interface": "tracing", "optional": True, "limit": 1}}},
+    "smtp": {
+        "type": "require", "integration":{"smtp": {"interface": "smtp", "optional": True, "limit": 1}}},
+    "openfga": {
+        "type": "require", "integration":{"openfga": {"interface": "openfga", "optional": True, "limit": 1}}},
+    "oidc": {
+        "type": "require", "integration":{"oidc": {"interface": "oauth", "optional": True, "limit": 1}}},
+    "http-proxy": {
+        "type": "require", "integration":{"http-proxy": {"interface": "http_proxy", "optional": True, "limit": 1}}},
     # Add other integrations here
 }
 
@@ -94,11 +107,18 @@ class CharmcraftGenerator:
                 charm_data = yaml.safe_load(f)
 
             # Add relations
-            relations = {}
+            requirer_relations = {}
+            provider_relations = {}
             for i_id in self.integrations:
                 if i_id in INTEGRATION_MAP:
-                    relations.update(INTEGRATION_MAP[i_id])
-            charm_data["requires"] = relations
+                    if INTEGRATION_MAP[i_id]["type"] == "require":
+                        requirer_relations.update(INTEGRATION_MAP[i_id]["integration"])
+                    elif INTEGRATION_MAP[i_id]["type"] == "provide":
+                        provider_relations.update(INTEGRATION_MAP[i_id]["integration"])
+            if provider_relations:
+                charm_data["provides"] = provider_relations
+            if requirer_relations:
+                charm_data["requires"] = requirer_relations
 
             # Add config options
             options = {}
@@ -107,7 +127,8 @@ class CharmcraftGenerator:
                 if opt.get("isOptional"):  # Check key directly from dict
                     config["default"] = self._get_typed_value(opt["value"], opt["type"])
                 options[opt["key"]] = config
-            charm_data["options"] = options
+            if options:
+                charm_data["options"] = options
 
             with open(yaml_path, "w") as f:
                 yaml.dump(charm_data, f, sort_keys=False)  # Keep order
