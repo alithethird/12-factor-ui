@@ -21,7 +21,7 @@ class TestBundleArtifacts:
         charm_path.write_text("mock-charm-content")
 
         # Bundle artifacts
-        zip_path, cleanup_func = BundleArtifacts(str(rock_path), str(charm_path))
+        zip_path = BundleArtifacts(str(rock_path), str(charm_path))
 
         # Verify ZIP file was created
         assert Path(zip_path).exists()
@@ -38,7 +38,6 @@ class TestBundleArtifacts:
             assert zf.read("test.charm") == b"mock-charm-content"
 
         # Cleanup
-        cleanup_func()
         assert not Path(zip_path).exists()
 
     def test_cleanup_function_removes_zip(self, temp_project_dir):
@@ -49,13 +48,10 @@ class TestBundleArtifacts:
         rock_path.write_text("mock-rock")
         charm_path.write_text("mock-charm")
 
-        zip_path, cleanup_func = BundleArtifacts(str(rock_path), str(charm_path))
+        zip_path = BundleArtifacts(str(rock_path), str(charm_path))
 
         # Verify ZIP exists
         assert Path(zip_path).exists()
-
-        # Call cleanup
-        cleanup_func()
 
         # Verify ZIP is deleted
         assert not Path(zip_path).exists()
@@ -94,7 +90,7 @@ class TestBundleArtifacts:
         rock_path.write_text("rock-content")
         charm_path.write_text("charm-content")
 
-        zip_path, cleanup_func = BundleArtifacts(str(rock_path), str(charm_path))
+        zip_path = BundleArtifacts(str(rock_path), str(charm_path))
 
         # Verify only basenames are in ZIP
         with ZipFile(zip_path, "r") as zf:
@@ -104,8 +100,6 @@ class TestBundleArtifacts:
             # Verify no subdirectory paths are included
             assert not any("subdir" in f for f in file_list)
 
-        cleanup_func()
-
     def test_multiple_bundlings_create_separate_zips(self, temp_project_dir):
         """Test that multiple bundlings create separate ZIP files."""
         # First bundle
@@ -114,7 +108,7 @@ class TestBundleArtifacts:
         rock_path1.write_text("rock1")
         charm_path1.write_text("charm1")
 
-        zip_path1, cleanup_func1 = BundleArtifacts(str(rock_path1), str(charm_path1))
+        zip_path1 = BundleArtifacts(str(rock_path1), str(charm_path1))
 
         # Second bundle
         rock_path2 = Path(temp_project_dir) / "rock2.rock"
@@ -122,16 +116,12 @@ class TestBundleArtifacts:
         rock_path2.write_text("rock2")
         charm_path2.write_text("charm2")
 
-        zip_path2, cleanup_func2 = BundleArtifacts(str(rock_path2), str(charm_path2))
+        zip_path2 = BundleArtifacts(str(rock_path2), str(charm_path2))
 
         # Verify they're different files
         assert zip_path1 != zip_path2
         assert Path(zip_path1).exists()
         assert Path(zip_path2).exists()
-
-        # Cleanup
-        cleanup_func1()
-        cleanup_func2()
 
         assert not Path(zip_path1).exists()
         assert not Path(zip_path2).exists()
@@ -148,10 +138,9 @@ class TestBundleArtifacts:
         rock_path.write_bytes(rock_content)
         charm_path.write_bytes(charm_content)
 
-        zip_path, cleanup_func = BundleArtifacts(str(rock_path), str(charm_path))
+        zip_path = BundleArtifacts(str(rock_path), str(charm_path))
 
         with ZipFile(zip_path, "r") as zf:
             assert zf.read("test.rock") == rock_content
             assert zf.read("test.charm") == charm_content
 
-        cleanup_func()

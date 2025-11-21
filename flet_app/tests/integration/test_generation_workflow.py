@@ -99,7 +99,7 @@ class TestGenerationWorkflow:
         assert Path(charm_path).exists()
 
         # Step 3: Bundle both artifacts
-        zip_path, cleanup_func = BundleArtifacts(rock_path, charm_path)
+        zip_path = BundleArtifacts(rock_path, charm_path)
 
         assert Path(zip_path).exists()
         assert zip_path.endswith(".zip")
@@ -113,7 +113,6 @@ class TestGenerationWorkflow:
             assert any("charm" in f for f in files)
 
         # Cleanup
-        cleanup_func()
         assert not Path(zip_path).exists()
 
     def test_error_handling_in_rock_workflow(self, temp_project_dir, mock_which):

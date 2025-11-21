@@ -22,7 +22,6 @@ class GenerateFiles(AccordionStep):
 
         # --- State specific to this step ---
         self._generated_zip_path = None
-        self._zip_cleanup_func = None
         self._rockcraft_yaml_path = None
         self._rock_file_path = None
         self._rock_pack_complete = False
@@ -204,10 +203,6 @@ class GenerateFiles(AccordionStep):
             self.update_status(f"Error saving file: {ex}")
             self.save_bundle_button.disabled = False
             self.page.update()
-        finally:
-            if self._zip_cleanup_func:
-                self._zip_cleanup_func()
-                self._zip_cleanup_func = None
 
     def update_status(self, message, is_log=False):
         if is_log:
@@ -307,9 +302,6 @@ class GenerateFiles(AccordionStep):
 
         # Clear bundle state
         self._generated_zip_path = None
-        if self._zip_cleanup_func:
-            self._zip_cleanup_func()
-            self._zip_cleanup_func = None
 
         self.page.update()
         thread = threading.Thread(target=self.rock_init, daemon=True)
@@ -445,9 +437,6 @@ class GenerateFiles(AccordionStep):
 
         # Clear bundle state
         self._generated_zip_path = None
-        if self._zip_cleanup_func:
-            self._zip_cleanup_func()
-            self._zip_cleanup_func = None
 
         self.page.update()
 
@@ -670,12 +659,11 @@ class GenerateFiles(AccordionStep):
 
             # --- Bundle ---
             self.update_status("Bundling artifacts...")
-            zip_path, zip_cleanup = BundleArtifacts(
+            zip_path = BundleArtifacts(
                 self._rock_file_path, self._charm_file_path
             )
 
             self._generated_zip_path = zip_path
-            self._zip_cleanup_func = zip_cleanup
             self.save_bundle_button.disabled = False
             self.update_status("Bundle created.")
             # Re-enable init buttons after successful bundle

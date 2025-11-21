@@ -229,7 +229,7 @@ class TestCanonicalRepoFlaskMinimal:
         assert charm_file.endswith(".charm"), f"Invalid charm file: {charm_file}"
         
         # --- Bundle Rock + Charm ---
-        bundle_path, cleanup = BundleArtifacts(rock_file, charm_file)
+        bundle_path = BundleArtifacts(rock_file, charm_file)
         assert os.path.exists(bundle_path), f"Bundle not created at {bundle_path}"
         assert bundle_path.endswith(".zip"), f"Invalid bundle file: {bundle_path}"
         
@@ -239,7 +239,6 @@ class TestCanonicalRepoFlaskMinimal:
         assert len(bundle_contents["charm_files"]) > 0, "Bundle does not contain charm file"
         
         # Cleanup
-        cleanup()
         charm_gen.cleanup()
         
         assert not os.path.exists(bundle_path), "Bundle cleanup failed"
@@ -275,7 +274,7 @@ class TestCanonicalRepoFlaskMinimal:
         charm_file = charm_gen.pack_charmcraft()
         
         # Create bundle
-        bundle_path, cleanup = BundleArtifacts(rock_file, charm_file)
+        bundle_path = BundleArtifacts(rock_file, charm_file)
         
         # Verify bundle contents
         with zipfile.ZipFile(bundle_path, "r") as zf:
@@ -291,5 +290,4 @@ class TestCanonicalRepoFlaskMinimal:
             assert os.sep not in charm_files[0], f"Charm file should not contain path separators: {charm_files[0]}"
         
         # Cleanup
-        cleanup()
         charm_gen.cleanup()

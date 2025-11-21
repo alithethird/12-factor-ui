@@ -12,5 +12,5 @@ def BundleArtifacts(rock_file, charm_file):
         zf.write(rock_file, os.path.basename(rock_file))
         zf.write(charm_file, os.path.basename(charm_file))
 
-    cleanup = lambda: os.remove(tmp_zip_path)
-    return tmp_zip_path, cleanup
+
+    return tmp_zip_path
